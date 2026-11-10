@@ -9,7 +9,7 @@ import { Badge, Card, DemoBadge, EmptyState, SectionTitle, StatTile } from "@/co
 import { summarizeRecent } from "@/components/dashboard/VisitPrep";
 import { formatKoreanDate, todayISO } from "@/lib/date";
 import { CONDITION_FACE, MODE_LABEL, SCOPE_LABEL } from "@/lib/labels";
-import { grantedPatients, grantedScopes, mealsOn, medicationsOf, recordsOf, requestsOf } from "@/lib/selectors";
+import { currentAdmission, grantedPatients, grantedScopes, mealsOn, medicationsOf, recordsOf, requestsOf } from "@/lib/selectors";
 import type { AccessScope, CareLogData } from "@/types";
 
 /**
@@ -47,10 +47,11 @@ export function GuardianDashboard({ data, guardianId }: { data: CareLogData; gua
         const latest = records.at(-1);
         const s7 = summarizeRecent(records, 7);
         const inpatient = p.careMode === "inpatient";
+        const admission = currentAdmission(data, p.id);
         return (
           <div key={p.id} className="space-y-5">
             <Card>
-              <SectionTitle icon={Eye} title={p.name} subtitle={`${p.department} · ${MODE_LABEL[p.careMode]} 중${inpatient ? ` · ${p.ward} ${p.room}` : ""}`} action={<DemoBadge />} />
+              <SectionTitle icon={Eye} title={p.name} subtitle={`${p.department} · ${MODE_LABEL[p.careMode]} 중${inpatient && admission ? ` · ${admission.ward} ${admission.room}` : ""}`} action={<DemoBadge />} />
               <div className="flex flex-wrap items-center gap-1.5 text-sm text-slate-500">
                 허용된 정보:
                 {scopes.map((s) => (

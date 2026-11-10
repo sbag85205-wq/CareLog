@@ -25,12 +25,13 @@ import { LifeRequestPanel } from "@/components/inpatient/LifeRequestPanel";
 import { MealTracker } from "@/components/inpatient/MealTracker";
 import { RequestStatusSteps } from "@/components/inpatient/RequestStatusSteps";
 import { MedicationList } from "@/components/medication/MedicationList";
-import { Badge, Button, Card, cn, DemoBadge, EmptyState, SectionTitle } from "@/components/ui/primitives";
+import { Badge, Button, Card, cn, DemoBadge, EmptyState, ErrorText, SectionTitle } from "@/components/ui/primitives";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { repository } from "@/hooks/useCareLog";
 import { formatKoreanDate, todayISO } from "@/lib/date";
 import { CONDITION_FACE, MEAL_INTAKE_LABEL, MODE_LABEL, REQUEST_CATEGORY_LABEL } from "@/lib/labels";
-import { mealsOn, medicationsOf, questionsOf, recordOn, recordsOf, requestsOf } from "@/lib/selectors";
-import type { CareLogData, CareMode, Patient } from "@/types";
+import { currentAdmission, mealsOn, medicationsOf, questionsOf, recordOn, recordsOf, requestsOf } from "@/lib/selectors";
+import type { Admission, CareLogData, CareMode, Patient } from "@/types";
 
 type TabKey = "home" | "history" | "meds" | "visit" | "meals" | "requests";
 
@@ -55,15 +56,19 @@ export function PatientDashboard({ data, patient }: { data: CareLogData; patient
   const mode = patient.careMode;
   const tabs = TABS[mode];
   const activeTab = tabs.some((t) => t.key === tab) ? tab : "home";
+  const admission = currentAdmission(data, patient.id);
+  const modeAction = useAsyncAction();
 
   const changeMode = (m: CareMode) => {
-    void repository.setCareMode(patient.id, m);
+    if (m === patient.careMode) return;
     setTab("home");
+    void modeAction.run(() => repository.setCareMode(patient.id, m));
   };
 
   return (
     <div className="space-y-5">
-      <PatientHero patient={patient} onModeChange={changeMode} />
+      <PatientHero patient={patient} admission={admission} onModeChange={changeMode} />
+      <ErrorText>{modeAction.error}</ErrorText>
 
       <nav
         aria-label="환자 메뉴"
@@ -92,8 +97,8 @@ export function PatientDashboard({ data, patient }: { data: CareLogData; patient
         </ul>
       </nav>
 
-      {activeTab === "home" && <PatientHome data={data} patient={patient} goTo={setTab} />}
-      {activeTab === "history" && <HealthHistory patient={patient} records={recordsOf(data, patient.id)} />}
+      {activeTab === "home" && <PatientHome data={data} patient={patient} admission={admission} goTo={setTab} />}
+      {activeTab === "history" && <HealthHistory patient={patient} admission={admission} records={recordsOf(data, patient.id)} />}
       {activeTab === "meds" && <MedicationList medications={medicationsOf(data, patient.id)} />}
       {activeTab === "visit" && (
         <VisitPrep patient={patient} records={recordsOf(data, patient.id)} questions={questionsOf(data, patient.id)} />
@@ -114,7 +119,15 @@ export function PatientDashboard({ data, patient }: { data: CareLogData; patient
   );
 }
 
-function PatientHero({ patient, onModeChange }: { patient: Patient; onModeChange: (m: CareMode) => void }) {
+function PatientHero({
+  patient,
+  admission,
+  onModeChange,
+}: {
+  patient: Patient;
+  admission?: Admission;
+  onModeChange: (m: CareMode) => void;
+}) {
   const inpatient = patient.careMode === "inpatient";
   return (
     <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-teal-500 to-sky-600 p-5 text-white shadow-md sm:p-6">
@@ -129,8 +142,8 @@ function PatientHero({ patient, onModeChange }: { patient: Patient; onModeChange
             {formatKoreanDate(todayISO())} ·{" "}
             {inpatient ? (
               <>
-                {patient.ward} {patient.room} 입원 중
-                {patient.admissionDate && ` (입원일 ${formatKoreanDate(patient.admissionDate, false)})`}
+                {admission ? `${admission.ward} ${admission.room} 입원 중` : "입원 중"}
+                {admission && ` (입원일 ${formatKoreanDate(admission.admittedOn, false)})`}
               </>
             ) : (
               <>
@@ -163,6 +176,9 @@ function PatientHero({ patient, onModeChange }: { patient: Patient; onModeChange
               );
             })}
           </div>
+          <p className="mt-1.5 max-w-72 text-[11px] leading-snug text-white/85">
+            입원 모드는 <strong>환자 자기기록 모드</strong>이며 병원의 공식 입원 확인이 아닙니다.
+          </p>
         </div>
       </div>
     </div>
@@ -177,7 +193,17 @@ function NextVisitBadgeLight({ date }: { date?: string }) {
   );
 }
 
-function PatientHome({ data, patient, goTo }: { data: CareLogData; patient: Patient; goTo: (t: TabKey) => void }) {
+function PatientHome({
+  data,
+  patient,
+  admission,
+  goTo,
+}: {
+  data: CareLogData;
+  patient: Patient;
+  admission?: Admission;
+  goTo: (t: TabKey) => void;
+}) {
   const today = todayISO();
   const todayRecord = recordOn(data, patient.id, today);
   const [editing, setEditing] = useState(false);
@@ -240,7 +266,7 @@ function PatientHome({ data, patient, goTo }: { data: CareLogData; patient: Pati
             subtitle={inpatient ? "통원 기록부터 입원 기록까지 이어서 보기" : "최근 건강 상태"}
             action={<DemoBadge />}
           />
-          <HealthChart records={records} admissionDate={inpatient ? patient.admissionDate : undefined} />
+          <HealthChart records={records} admissionDate={inpatient ? admission?.admittedOn : undefined} />
           <button type="button" onClick={() => goTo("history")} className="mt-3 inline-flex items-center gap-1 text-sm font-semibold text-teal-700 hover:underline">
             전체 기록·달력 보기 <ChevronRight className="h-4 w-4" aria-hidden />
           </button>

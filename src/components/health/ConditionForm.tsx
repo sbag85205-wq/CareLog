@@ -2,7 +2,8 @@
 
 import { Angry, CheckCircle2, Frown, Laugh, Meh, Save, Smile } from "lucide-react";
 import { useState } from "react";
-import { Button, ChoiceGroup, cn } from "@/components/ui/primitives";
+import { Button, ChoiceGroup, cn, ErrorText } from "@/components/ui/primitives";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { repository } from "@/hooks/useCareLog";
 import {
   CONDITION_FACE,
@@ -23,7 +24,6 @@ interface Props {
   mode: CareMode;
   existing?: HealthRecord;
   onSaved?: () => void;
-  compact?: boolean;
 }
 
 /**
@@ -41,6 +41,7 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
   const [symptoms, setSymptoms] = useState<string[]>(existing?.symptoms ?? []);
   const [memo, setMemo] = useState(existing?.memo ?? "");
   const [saved, setSaved] = useState(false);
+  const saveAction = useAsyncAction();
 
   const missing = [
     !condition && "컨디션",
@@ -52,7 +53,8 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
 
   async function save() {
     if (missing.length) return;
-    await repository.upsertHealthRecord({
+    // 저장이 확정된 뒤에만 폼을 닫음 — 실패하면 입력 내용을 그대로 두고 오류 안내
+    const res = await saveAction.run(() => repository.upsertHealthRecord({
       patientId,
       date,
       condition: condition!,
@@ -64,7 +66,8 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
       symptoms,
       memo: memo.trim(),
       recordedIn: existing?.recordedIn ?? mode,
-    });
+    }));
+    if (!res.ok) return;
     setSaved(true);
     onSaved?.();
   }
@@ -201,6 +204,7 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
         />
       </Field>
 
+      <ErrorText>{saveAction.error}</ErrorText>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-slate-500" aria-live="polite">
           {saved ? (
@@ -213,8 +217,8 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
             "모든 항목을 입력했어요"
           )}
         </p>
-        <Button type="submit" size="lg" icon={Save} disabled={missing.length > 0}>
-          {existing ? "기록 수정" : "기록 저장"}
+        <Button type="submit" size="lg" icon={Save} disabled={missing.length > 0 || saveAction.pending}>
+          {saveAction.pending ? "저장 중…" : existing ? "기록 수정" : "기록 저장"}
         </Button>
       </div>
     </form>

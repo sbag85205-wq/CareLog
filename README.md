@@ -38,7 +38,22 @@ npm run dev -- -p 3333      # 포트 지정 (공유 서버에서 3000이 사용 
 
 npm run lint                # ESLint
 npx tsc --noEmit            # 타입 검사
+npm test                    # 단위 테스트 (Vitest)
+npm run test:e2e            # 사용자 흐름 테스트 (Playwright, 개발 서버 자동 실행 · 기본 포트 3334, E2E_PORT로 변경)
 npm run build && npm start  # 프로덕션 빌드/실행
+```
+
+`npm run test:e2e`는 Chromium을 프로젝트 `node_modules` 안에 설치하고, 시스템 라이브러리가 없는 서버(root 권한 없음)에서는
+필요한 라이브러리를 `.e2e-libs/`(Git 제외)에 풀어서 사용합니다.
+
+### DB 전환 대비 — 가상 네트워크 지연·실패 재현 (개발 서버 전용)
+
+브라우저 개발자 도구 콘솔에서 설정한 뒤 새로고침합니다. 프로덕션 빌드에서는 무시됩니다.
+
+```js
+localStorage.setItem("carelog.dev.latencyMs", "1500"); // 모든 저장에 1.5초 지연
+localStorage.setItem("carelog.dev.failWrites", "1");   // 모든 저장 실패 (복구·오류 안내 확인)
+localStorage.removeItem("carelog.dev.latencyMs"); localStorage.removeItem("carelog.dev.failWrites"); // 해제
 ```
 
 원격 서버(SSH)에서 실행할 경우 VS Code의 **포트(Ports) 탭**에서 해당 포트를 포워딩하거나,
@@ -61,9 +76,10 @@ src/
 │   ├── guardian/           # GuardianDashboard
 │   └── ui/                 # 공통 카드·버튼·선택 버튼 등
 ├── data/mock-data.ts       # 가상 데이터 생성 (오늘 기준 상대 날짜, 시드 고정)
-├── types/index.ts          # 도메인 타입 (DB 스키마 초안)
+├── types/index.ts          # 도메인 타입 (DB 스키마 초안) — 시각은 UTC ISO 8601, 날짜는 한국(Asia/Seoul) 기준
 ├── lib/
-│   ├── repository/         # 데이터 접근 계층 (인터페이스 + localStorage 구현)
+│   ├── repository/         # 데이터 접근 계층 (인터페이스 + localStorage 구현 + 버전 마이그레이션)
+│   ├── domain/             # 상태 전이·입원 이력 규칙 (DB 함수로 옮길 대상)
 │   ├── selectors.ts        # 조회 로직 (향후 DB 쿼리로 대체)
 │   ├── triage.ts           # 시연용 분류 기준
 │   ├── medication-info.ts  # 의약품 정보 제공자 인터페이스 (식약처 API 대비)
@@ -78,6 +94,8 @@ src/
 - Supabase 전환 시 같은 인터페이스로 `supabase.ts`를 구현하고 `src/lib/repository/index.ts`에서 교체합니다.
 - 접근 권한은 `AccessGrant`(환자·피부여자·범위) 및 `Medication.visibleToGuardian`으로 모델링되어 있으며,
   현재는 프론트엔드 필터링일 뿐 **실제 보안 기능이 아닙니다**. 실제 서비스에서는 Supabase RLS로 서버에서 강제해야 합니다.
+
+Supabase 전환 분석·설계와 단계별 계획은 [docs/supabase-migration-plan.md](docs/supabase-migration-plan.md)에 있습니다.
 
 ## 다음 단계
 

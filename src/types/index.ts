@@ -38,16 +38,38 @@ export interface Patient {
   birthYear: number;
   gender: "M" | "F";
   department: string;
+  /**
+   * 현재 이용 모드 — **환자 자기기록 모드**이며 병원의 공식 입원 확인이 아닙니다.
+   * 입원 정보(병동·병실·입원일)는 Admission 이력에 있습니다.
+   */
   careMode: CareMode;
-  /** 입원 정보 (입원 모드일 때) */
-  ward?: string;
-  room?: string;
-  admissionDate?: string;
   /** 다음 진료일 (YYYY-MM-DD) */
   nextVisitDate?: string;
   /** 담당 의료진 사용자 ID */
   assignedStaffIds: string[];
   isDemo: true;
+}
+
+/** 입원 기록 출처: 환자 자기기록 / (향후) 병원 확인 */
+export type AdmissionSource = "self_reported" | "hospital_confirmed";
+
+/**
+ * 입원 이력 (향후 admissions 테이블).
+ * 재입원은 항상 새 행이며, 과거 행은 삭제·수정하지 않고 퇴원일만 기록합니다.
+ */
+export interface Admission {
+  id: string;
+  patientId: string;
+  ward: string;
+  room: string;
+  /** 입원일 (한국 날짜) */
+  admittedOn: string;
+  /** 퇴원일 (한국 날짜). 없으면 진행 중인 입원 */
+  dischargedOn?: string;
+  source: AdmissionSource;
+  /** UTC ISO 8601 */
+  createdAt: string;
+  isDemo: boolean;
 }
 
 /** 하루 단위 건강기록. 통원/입원 모드와 무관하게 같은 환자 ID에 누적됩니다. */
@@ -156,12 +178,18 @@ export interface AccessGrant {
   approvedAt: string;
 }
 
-/** 전체 데이터 스냅샷 (프로토타입 저장 단위) */
+/**
+ * 전체 데이터 스냅샷 (프로토타입 저장 단위)
+ * - 모든 `*At` 필드(createdAt, updatedAt, approvedAt, seededAt)는 UTC ISO 8601 ("...Z")
+ * - `date`, `admittedOn` 등 날짜 필드는 한국(Asia/Seoul) 기준 YYYY-MM-DD
+ * - version 변경 이력은 src/lib/repository/migrate.ts 참조
+ */
 export interface CareLogData {
   version: number;
   seededAt: string;
   users: DemoUser[];
   patients: Patient[];
+  admissions: Admission[];
   records: HealthRecord[];
   medications: Medication[];
   visitQuestions: VisitQuestion[];
@@ -176,6 +204,8 @@ export type TriageFlag = "review" | "insufficient" | "change" | "stable";
 
 export interface PatientSummary {
   patient: Patient;
+  /** 진행 중인 입원 (없으면 undefined) */
+  admission?: Admission;
   recordDays30: number;
   avgCondition30: number | null;
   avgCondition7: number | null;

@@ -5,6 +5,8 @@
  *    의료진이 기록을 직접 확인하도록 목록을 정렬·표시하는 용도로만 사용합니다.
  */
 import { addDays, todayISO } from "@/lib/date";
+import { currentAdmission } from "@/lib/domain/admissions";
+import { reviewsOf } from "@/lib/selectors";
 import type { CareLogData, HealthRecord, PatientSummary, TriageFlag } from "@/types";
 
 export const TRIAGE_RULES = {
@@ -52,10 +54,10 @@ export function summarizePatient(
   if (flags.length === 0) flags.push("stable");
 
   const lastRecordDate = recs.reduce<string | null>((m, r) => (!m || r.date > m ? r.date : m), null);
-  const reviews = d.reviews.filter((r) => r.patientId === patientId);
 
   return {
     patient,
+    admission: currentAdmission(d, patientId),
     recordDays30: last30.length,
     avgCondition30: avg30,
     avgCondition7: avg7,
@@ -63,7 +65,7 @@ export function summarizePatient(
     lastRecordDate,
     flags,
     openRequests: d.requests.filter((r) => r.patientId === patientId && r.status !== "completed").length,
-    lastReview: reviews.sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0],
+    lastReview: reviewsOf(d, patientId)[0],
   };
 }
 

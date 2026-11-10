@@ -140,7 +140,7 @@ export function Button({
   size = "md",
 }: {
   children: ReactNode;
-  onClick?: () => void;
+  onClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   variant?: "primary" | "secondary" | "ghost" | "danger";
   icon?: LucideIcon;
   type?: "button" | "submit";
@@ -198,6 +198,16 @@ export function StatTile({
       </div>
       {hint && <div className="mt-0.5 text-xs text-slate-500">{hint}</div>}
     </div>
+  );
+}
+
+/** 저장 실패 등 오류 안내 (스크린리더에 즉시 읽힘) */
+export function ErrorText({ children, className }: { children: ReactNode; className?: string }) {
+  if (!children) return null;
+  return (
+    <p role="alert" className={cn("rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700", className)}>
+      {children}
+    </p>
   );
 }
 

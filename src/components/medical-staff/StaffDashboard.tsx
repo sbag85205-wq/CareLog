@@ -15,13 +15,15 @@ import { HealthChart } from "@/components/health/HealthChart";
 import { REQUEST_ICON } from "@/components/inpatient/LifeRequestPanel";
 import { RequestStatusSteps } from "@/components/inpatient/RequestStatusSteps";
 import { TriageBadge } from "@/components/medical-staff/TriageBadge";
-import { Badge, Button, Card, cn, DemoBadge, EmptyState, SectionTitle, Sheet, StatTile } from "@/components/ui/primitives";
+import { Badge, Button, Card, cn, DemoBadge, EmptyState, ErrorText, SectionTitle, Sheet, StatTile } from "@/components/ui/primitives";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { repository } from "@/hooks/useCareLog";
+import { nextRequestStatus } from "@/lib/domain/request-status";
 import { formatDateTime, formatKoreanDate, formatShortDate } from "@/lib/date";
 import { CONDITION_FACE, MODE_LABEL, REQUEST_CATEGORY_LABEL } from "@/lib/labels";
-import { patientById, recordsOf, requestsOf } from "@/lib/selectors";
+import { currentAdmission, patientById, recordsOf, requestsForStaff, reviewsOf } from "@/lib/selectors";
 import { summarizeAll, TRIAGE_RULES } from "@/lib/triage";
-import type { CareLogData, PatientSummary, ReviewAction, TriageFlag } from "@/types";
+import type { CareLogData, LifeRequest, PatientSummary, ReviewAction, TriageFlag } from "@/types";
 
 const FILTERS: { key: TriageFlag | "all"; label: string }[] = [
   { key: "all", label: "전체" },
@@ -36,7 +38,8 @@ export function StaffDashboard({ data, staffId }: { data: CareLogData; staffId: 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const staff = data.users.find((u) => u.id === staffId);
   const count = (f: TriageFlag) => summaries.filter((s) => s.flags.includes(f)).length;
-  const openRequests = data.requests.filter((r) => r.status !== "completed").length;
+  // 담당 환자의 요청만 (화면 필터 — DB 전환 후 RLS로 서버에서도 차단 필요)
+  const openRequests = requestsForStaff(data, staffId).filter((r) => r.status !== "completed").length;
   const shown = filter === "all" ? summaries : summaries.filter((s) => s.flags.includes(filter));
   const selected = summaries.find((s) => s.patient.id === selectedId);
 
@@ -129,7 +132,7 @@ function PatientRow({ s, onOpen }: { s: PatientSummary; onOpen: () => void }) {
             </span>
             <Badge tone={s.patient.careMode === "inpatient" ? "blue" : "teal"} icon={s.patient.careMode === "inpatient" ? BedDouble : undefined}>
               {MODE_LABEL[s.patient.careMode]}
-              {s.patient.careMode === "inpatient" && s.patient.room && ` ${s.patient.room}`}
+              {s.patient.careMode === "inpatient" && s.admission && ` ${s.admission.room}`}
             </Badge>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -170,14 +173,17 @@ function PatientRow({ s, onOpen }: { s: PatientSummary; onOpen: () => void }) {
 function PatientDetail({ data, s, staffId }: { data: CareLogData; s: PatientSummary; staffId: string }) {
   const [note, setNote] = useState("");
   const [savedMsg, setSavedMsg] = useState("");
+  const review = useAsyncAction();
   const records = recordsOf(data, s.patient.id);
   const recent = [...records].reverse().slice(0, 7);
-  const reviews = data.reviews
-    .filter((r) => r.patientId === s.patient.id)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const reviews = reviewsOf(data, s.patient.id);
 
   async function act(action: ReviewAction) {
-    await repository.addStaffReview({ patientId: s.patient.id, staffId, action, note: note.trim() });
+    setSavedMsg("");
+    const res = await review.run(() =>
+      repository.addStaffReview({ patientId: s.patient.id, staffId, action, note: note.trim() }),
+    );
+    if (!res.ok) return;
     setNote("");
     setSavedMsg(action === "checked" ? "‘확인 완료’로 기록했습니다 (데모)" : "‘진료 상담 필요’로 기록했습니다 (데모)");
   }
@@ -194,12 +200,12 @@ function PatientDetail({ data, s, staffId }: { data: CareLogData; s: PatientSumm
         <StatTile label="30일 평균" value={s.avgCondition30?.toFixed(1) ?? "-"} unit="/5" />
         <StatTile label="최근 7일 평균" value={s.avgCondition7?.toFixed(1) ?? "-"} unit="/5" />
         <StatTile label="기록 일수" value={s.recordDays30} unit="/30일" />
-        <StatTile label="이용 모드" value={MODE_LABEL[s.patient.careMode]} hint={s.patient.careMode === "inpatient" ? `${s.patient.ward} ${s.patient.room}` : undefined} />
+        <StatTile label="이용 모드" value={MODE_LABEL[s.patient.careMode]} hint={s.patient.careMode === "inpatient" && s.admission ? `${s.admission.ward} ${s.admission.room} (자기기록)` : undefined} />
       </div>
 
       <div>
         <h3 className="mb-2 font-bold text-slate-800">최근 30일 컨디션 변화</h3>
-        <HealthChart records={records} days={30} admissionDate={s.patient.careMode === "inpatient" ? s.patient.admissionDate : undefined} />
+        <HealthChart records={records} days={30} admissionDate={s.patient.careMode === "inpatient" ? s.admission?.admittedOn : undefined} />
       </div>
 
       <div>
@@ -234,13 +240,14 @@ function PatientDetail({ data, s, staffId }: { data: CareLogData; s: PatientSumm
           className="w-full rounded-2xl border-2 border-slate-200 bg-white p-3 text-base outline-none focus:border-teal-400"
         />
         <div className="mt-2 flex flex-wrap gap-2">
-          <Button icon={CheckCheck} onClick={() => void act("checked")}>
+          <Button icon={CheckCheck} disabled={review.pending} onClick={() => void act("checked")}>
             확인 완료
           </Button>
-          <Button variant="secondary" icon={MessageSquareWarning} onClick={() => void act("consult_needed")}>
+          <Button variant="secondary" icon={MessageSquareWarning} disabled={review.pending} onClick={() => void act("consult_needed")}>
             진료 상담 필요
           </Button>
         </div>
+        <ErrorText className="mt-2">{review.error}</ErrorText>
         {savedMsg && <p className="mt-2 text-sm font-semibold text-teal-700" aria-live="polite">{savedMsg}</p>}
         <p className="mt-2 text-xs text-slate-500">후속 조치는 기록용이며 진료 일정이나 응급 대응을 자동으로 변경하지 않습니다.</p>
         {reviews.length > 0 && (
@@ -259,54 +266,21 @@ function PatientDetail({ data, s, staffId }: { data: CareLogData; s: PatientSumm
 }
 
 function RequestQueue({ data, staffId }: { data: CareLogData; staffId: string }) {
-  const all = requestsOf(data);
+  // 담당 환자의 요청만 표시 (화면 필터 — DB 전환 후 RLS로 서버에서도 차단 필요)
+  const all = requestsForStaff(data, staffId);
   const open = all.filter((r) => r.status !== "completed");
   const done = all.filter((r) => r.status === "completed").slice(0, 5);
 
   return (
     <Card>
-      <SectionTitle icon={HandHelping} title="입원 환자 생활 요청" subtitle={`미처리 ${open.length}건`} action={<DemoBadge />} />
+      <SectionTitle icon={HandHelping} title="입원 환자 생활 요청" subtitle={`담당 환자 · 미처리 ${open.length}건`} action={<DemoBadge />} />
       {open.length === 0 ? (
         <EmptyState>미처리 요청이 없습니다.</EmptyState>
       ) : (
         <ul className="space-y-3">
-          {open.map((r) => {
-            const p = patientById(data, r.patientId);
-            const Icon = REQUEST_ICON[r.category];
-            return (
-              <li key={r.id} className="rounded-2xl border border-slate-100 p-4">
-                <div className="flex items-start gap-3">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
-                    <Icon className="h-5 w-5" aria-hidden />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-x-2 text-sm">
-                      <span className="font-bold text-slate-900">{REQUEST_CATEGORY_LABEL[r.category]}</span>
-                      <span className="text-slate-500">
-                        {p?.name} {p?.room && `· ${p.room}`}
-                      </span>
-                    </div>
-                    <p className="text-sm text-slate-600">{r.detail}</p>
-                    <p className="text-xs text-slate-400">{formatDateTime(r.createdAt)} 접수</p>
-                    <div className="mt-2 overflow-x-auto">
-                      <RequestStatusSteps status={r.status} />
-                    </div>
-                    <div className="mt-3">
-                      {r.status === "received" ? (
-                        <Button size="sm" variant="secondary" onClick={() => void repository.updateRequestStatus(r.id, "acknowledged", staffId)}>
-                          직원 확인
-                        </Button>
-                      ) : (
-                        <Button size="sm" onClick={() => void repository.updateRequestStatus(r.id, "completed", staffId)}>
-                          처리 완료{r.mealChange ? " (식사 형태 반영)" : ""}
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </li>
-            );
-          })}
+          {open.map((r) => (
+            <RequestQueueItem key={r.id} data={data} request={r} staffId={staffId} />
+          ))}
         </ul>
       )}
       {done.length > 0 && (
@@ -322,5 +296,54 @@ function RequestQueue({ data, staffId }: { data: CareLogData; staffId: string })
         </div>
       )}
     </Card>
+  );
+}
+
+function RequestQueueItem({ data, request: r, staffId }: { data: CareLogData; request: LifeRequest; staffId: string }) {
+  const action = useAsyncAction();
+  const p = patientById(data, r.patientId);
+  const room = currentAdmission(data, r.patientId)?.room;
+  const Icon = REQUEST_ICON[r.category];
+  const next = nextRequestStatus(r.status);
+
+  const advance = (e: React.MouseEvent<HTMLButtonElement>) => {
+    // 더블클릭의 두 번째 클릭은 무시 — 바뀐 버튼("처리 완료")이 연달아 눌리는 것을 방지
+    if (e.detail > 1 || !next) return;
+    void action.run(() => repository.updateRequestStatus(r.id, r.status, next, staffId));
+  };
+
+  return (
+    <li className="rounded-2xl border border-slate-100 p-4">
+      <div className="flex items-start gap-3">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
+          <Icon className="h-5 w-5" aria-hidden />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2 text-sm">
+            <span className="font-bold text-slate-900">{REQUEST_CATEGORY_LABEL[r.category]}</span>
+            <span className="text-slate-500">
+              {p?.name} {room && `· ${room}`}
+            </span>
+          </div>
+          <p className="text-sm text-slate-600">{r.detail}</p>
+          <p className="text-xs text-slate-400">{formatDateTime(r.createdAt)} 접수</p>
+          <div className="mt-2 overflow-x-auto">
+            <RequestStatusSteps status={r.status} />
+          </div>
+          <ErrorText className="mt-2">{action.error}</ErrorText>
+          <div className="mt-3">
+            {next === "acknowledged" ? (
+              <Button size="sm" variant="secondary" disabled={action.pending} onClick={advance}>
+                직원 확인
+              </Button>
+            ) : next === "completed" ? (
+              <Button size="sm" disabled={action.pending} onClick={advance}>
+                처리 완료{r.mealChange ? " (식사 형태 반영)" : ""}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    </li>
   );
 }

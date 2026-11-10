@@ -2,8 +2,10 @@
 
 import { CalendarCheck, ClipboardList, MessageCircleQuestion, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { Button, Card, cn, DemoBadge, EmptyState, SectionTitle, StatTile } from "@/components/ui/primitives";
+import { Button, Card, cn, DemoBadge, EmptyState, ErrorText, SectionTitle, StatTile } from "@/components/ui/primitives";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { repository } from "@/hooks/useCareLog";
+import { toUserMessage } from "@/lib/errors";
 import { addDays, diffDays, formatKoreanDate, todayISO } from "@/lib/date";
 import type { HealthRecord, Patient, VisitQuestion } from "@/types";
 
@@ -42,7 +44,13 @@ export function VisitPrep({
   questions: VisitQuestion[];
 }) {
   const [text, setText] = useState("");
+  const [listError, setListError] = useState<string | null>(null);
+  const addAction = useAsyncAction();
   const s = summarizeRecent(records, 14);
+  const guard = (task: Promise<void>) => {
+    setListError(null);
+    task.catch((e) => setListError(toUserMessage(e)));
+  };
 
   return (
     <div className="space-y-5">
@@ -82,8 +90,9 @@ export function VisitPrep({
           onSubmit={(e) => {
             e.preventDefault();
             if (!text.trim()) return;
-            void repository.addVisitQuestion(patient.id, text.trim());
-            setText("");
+            void addAction.run(() => repository.addVisitQuestion(patient.id, text.trim())).then((res) => {
+              if (res.ok) setText("");
+            });
           }}
         >
           <input
@@ -93,10 +102,11 @@ export function VisitPrep({
             placeholder="예) 약을 식전에 먹어도 되나요?"
             className="h-12 min-w-0 flex-1 rounded-2xl border-2 border-slate-200 px-4 text-base outline-none focus:border-teal-400"
           />
-          <Button type="submit" icon={Plus} className="h-12">
+          <Button type="submit" icon={Plus} className="h-12" disabled={addAction.pending}>
             추가
           </Button>
         </form>
+        <ErrorText className="mb-3">{addAction.error ?? listError}</ErrorText>
         {questions.length === 0 ? (
           <EmptyState>아직 메모한 질문이 없습니다.</EmptyState>
         ) : (
@@ -106,14 +116,14 @@ export function VisitPrep({
                 <input
                   type="checkbox"
                   checked={q.done}
-                  onChange={() => void repository.toggleVisitQuestion(q.id)}
+                  onChange={() => guard(repository.toggleVisitQuestion(q.id))}
                   aria-label="질문 완료 표시"
                   className="h-5 w-5 accent-teal-500"
                 />
                 <span className={cn("flex-1 text-base", q.done && "text-slate-400 line-through")}>{q.text}</span>
                 <button
                   type="button"
-                  onClick={() => void repository.deleteVisitQuestion(q.id)}
+                  onClick={() => guard(repository.deleteVisitQuestion(q.id))}
                   aria-label="질문 삭제"
                   className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
                 >

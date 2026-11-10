@@ -1,9 +1,11 @@
 "use client";
 
-import { Clock, Soup, UtensilsCrossed } from "lucide-react";
+import { Clock, Loader2, Soup, UtensilsCrossed } from "lucide-react";
 import { useState } from "react";
-import { Badge, Button, Card, ChoiceGroup, DemoBadge, SectionTitle } from "@/components/ui/primitives";
+import { Badge, Button, Card, ChoiceGroup, DemoBadge, ErrorText, SectionTitle } from "@/components/ui/primitives";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { repository } from "@/hooks/useCareLog";
+import { toUserMessage } from "@/lib/errors";
 import { formatKoreanDate } from "@/lib/date";
 import { DIGESTION_LABEL, MEAL_INTAKE_LABEL, MEAL_INTAKE_OPTIONS, MEAL_SLOT_LABEL, MEAL_TYPE_LABEL } from "@/lib/labels";
 import type { MealView } from "@/lib/selectors";
@@ -38,31 +40,47 @@ export function MealTracker({
 function MealCard({ patientId, date, meal, readOnly }: { patientId: string; date: string; meal: MealView; readOnly: boolean }) {
   const [changing, setChanging] = useState(false);
   const [toType, setToType] = useState<MealType>("porridge");
+  /** 저장 대기 중인 선택 수 — 선택은 화면에 즉시 반영되고, 저장은 뒤에서 진행 */
+  const [saving, setSaving] = useState(0);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const changeRequest = useAsyncAction();
 
-  const save = (patch: { intake?: MealIntake; digestion?: Digestion }) =>
-    void repository.upsertMealLog({
-      patientId,
-      date,
-      slot: meal.slot,
-      mealType: meal.mealType,
-      intake: patch.intake ?? meal.log?.intake,
-      digestion: patch.digestion ?? meal.log?.digestion,
-    });
+  async function save(patch: { intake?: MealIntake; digestion?: Digestion }) {
+    setSaveError(null);
+    setSaving((n) => n + 1);
+    try {
+      // 저장소가 낙관적으로 먼저 반영하고, 실패하면 이전 값으로 되돌립니다.
+      await repository.upsertMealLog({ patientId, date, slot: meal.slot, ...patch });
+    } catch (e) {
+      setSaveError(`${toUserMessage(e)} 이전 선택으로 되돌렸습니다.`);
+    } finally {
+      setSaving((n) => n - 1);
+    }
+  }
 
   async function requestChange() {
-    await repository.createRequest({
-      patientId,
-      category: "meal_change",
-      detail: `${MEAL_SLOT_LABEL[meal.slot]} 식사를 '${MEAL_TYPE_LABEL[toType]}'(으)로 변경 요청`,
-      mealChange: { date, slot: meal.slot, toType },
-    });
-    setChanging(false);
+    const res = await changeRequest.run(() =>
+      repository.createRequest({
+        patientId,
+        category: "meal_change",
+        detail: `${MEAL_SLOT_LABEL[meal.slot]} 식사를 '${MEAL_TYPE_LABEL[toType]}'(으)로 변경 요청`,
+        mealChange: { date, slot: meal.slot, toType },
+      }),
+    );
+    if (res.ok) setChanging(false);
   }
 
   return (
     <div className="flex flex-col rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-lg font-bold text-slate-900">{MEAL_SLOT_LABEL[meal.slot]}</span>
+        <span className="flex items-center gap-1.5 text-lg font-bold text-slate-900">
+          {MEAL_SLOT_LABEL[meal.slot]}
+          {saving > 0 && (
+            <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-400" aria-live="polite">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> 저장 중
+            </span>
+          )}
+        </span>
         <Badge tone={meal.mealType === "regular" ? "slate" : "blue"}>{MEAL_TYPE_LABEL[meal.mealType]}</Badge>
       </div>
       <p className="mb-3 text-sm leading-relaxed text-slate-600">{meal.menu.join(" · ")}</p>
@@ -105,6 +123,8 @@ function MealCard({ patientId, date, meal, readOnly }: { patientId: string; date
             />
           </div>
 
+          <ErrorText>{saveError}</ErrorText>
+
           {changing ? (
             <div className="rounded-xl bg-white p-3 ring-1 ring-slate-200">
               <div className="mb-2 text-sm font-semibold text-slate-700">원하는 식사 형태</div>
@@ -117,9 +137,10 @@ function MealCard({ patientId, date, meal, readOnly }: { patientId: string; date
                 options={MEAL_TYPES.filter((t) => t !== meal.mealType).map((t) => ({ value: t, label: <span className="text-xs">{MEAL_TYPE_LABEL[t]}</span> }))}
               />
               <p className="mt-2 text-xs text-slate-500">요청은 즉시 확정되지 않고 담당 직원 확인 후 반영됩니다.</p>
+              <ErrorText className="mt-2">{changeRequest.error}</ErrorText>
               <div className="mt-2 flex gap-2">
-                <Button size="sm" onClick={() => void requestChange()}>
-                  요청 보내기
+                <Button size="sm" disabled={changeRequest.pending} onClick={() => void requestChange()}>
+                  {changeRequest.pending ? "보내는 중…" : "요청 보내기"}
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setChanging(false)}>
                   취소

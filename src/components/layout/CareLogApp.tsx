@@ -18,7 +18,7 @@ export function CareLogApp() {
 
   const reset = () => {
     if (window.confirm("이 브라우저에 저장된 가상 기록을 모두 지우고 데모 데이터를 처음 상태로 되돌릴까요?")) {
-      void repository.resetDemoData();
+      repository.resetDemoData().catch(() => window.alert("데모 데이터를 초기화하지 못했습니다. 새로고침 후 다시 시도해 주세요."));
     }
   };
 

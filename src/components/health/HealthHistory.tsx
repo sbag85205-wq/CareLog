@@ -7,19 +7,21 @@ import { HealthChart } from "@/components/health/HealthChart";
 import { Badge, Card, cn, DemoBadge, SectionTitle, Sheet } from "@/components/ui/primitives";
 import { formatKoreanDate, lastNDates, todayISO, weekdayOf } from "@/lib/date";
 import { CONDITION_FACE, DIGESTION_LABEL, MEAL_INTAKE_LABEL, MODE_LABEL } from "@/lib/labels";
-import type { HealthRecord, Patient } from "@/types";
+import type { Admission, HealthRecord, Patient } from "@/types";
 
 const CONDITION_BG = ["", "bg-sky-100", "bg-sky-200", "bg-sky-300", "bg-sky-500 text-white", "bg-sky-700 text-white"];
 
 interface Props {
   patient: Patient;
+  /** 진행 중인 입원 (그래프 입원일 표시용) */
+  admission?: Admission;
   records: HealthRecord[];
   /** 수정 가능 여부 (환자 본인만) */
   editable?: boolean;
 }
 
 /** 건강기록 조회: 그래프 + 30일 달력(미기록일 표시) + 날짜별 목록·수정 */
-export function HealthHistory({ patient, records, editable = true }: Props) {
+export function HealthHistory({ patient, admission, records, editable = true }: Props) {
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [formVersion, setFormVersion] = useState(0);
   const today = todayISO();
@@ -34,7 +36,7 @@ export function HealthHistory({ patient, records, editable = true }: Props) {
     <div className="space-y-5">
       <Card>
         <SectionTitle icon={LineChartIcon} title="건강 변화 그래프" subtitle="통원·입원 기록이 하나로 이어집니다" action={<DemoBadge />} />
-        <HealthChart records={records} admissionDate={patient.careMode === "inpatient" ? patient.admissionDate : undefined} />
+        <HealthChart records={records} admissionDate={patient.careMode === "inpatient" ? admission?.admittedOn : undefined} />
       </Card>
 
       <Card>

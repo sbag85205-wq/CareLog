@@ -1,5 +1,6 @@
 /** 스냅샷에서 화면에 필요한 데이터를 뽑는 순수 함수들 (DB 쿼리로 대체될 부분) */
 import { getMenu } from "@/data/mock-data";
+import { byTimestampDesc } from "@/lib/date";
 import type { AccessScope, CareLogData, MealLog, MealSlot, Role } from "@/types";
 
 export const recordsOf = (d: CareLogData, patientId: string) =>
@@ -10,10 +11,30 @@ export const recordOn = (d: CareLogData, patientId: string, date: string) =>
 
 export const patientById = (d: CareLogData, id: string) => d.patients.find((p) => p.id === id);
 
+/** 생활 요청 (최신순 — 문자열이 아닌 실제 시각 기준) */
 export const requestsOf = (d: CareLogData, patientId?: string) =>
   d.requests
     .filter((r) => !patientId || r.patientId === patientId)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    .sort(byTimestampDesc((r) => r.createdAt));
+
+/** 의료진이 담당하는 환자 ID 목록 */
+export const assignedPatientIds = (d: CareLogData, staffId: string) =>
+  new Set(d.patients.filter((p) => p.assignedStaffIds.includes(staffId)).map((p) => p.id));
+
+/**
+ * 담당 환자의 생활 요청만 (최신순).
+ * ⚠️ 화면 필터일 뿐입니다. DB 전환 후에는 RLS(app.is_assigned_staff)로 서버에서 차단해야 합니다.
+ */
+export const requestsForStaff = (d: CareLogData, staffId: string) => {
+  const ids = assignedPatientIds(d, staffId);
+  return requestsOf(d).filter((r) => ids.has(r.patientId));
+};
+
+/** 의료진 검토 이력 (최신순) */
+export const reviewsOf = (d: CareLogData, patientId: string) =>
+  d.reviews.filter((r) => r.patientId === patientId).sort(byTimestampDesc((r) => r.createdAt));
+
+export { admissionsOf, currentAdmission } from "@/lib/domain/admissions";
 
 export const questionsOf = (d: CareLogData, patientId: string) =>
   d.visitQuestions.filter((q) => q.patientId === patientId);

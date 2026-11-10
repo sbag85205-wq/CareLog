@@ -4,7 +4,8 @@ import { BedDouble, CheckCircle2, Droplets, HandHelping, MessageSquarePlus, Soup
 import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { RequestStatusSteps } from "@/components/inpatient/RequestStatusSteps";
-import { Button, Card, ChoiceGroup, cn, DemoBadge, EmptyState, SectionTitle } from "@/components/ui/primitives";
+import { Button, Card, ChoiceGroup, cn, DemoBadge, EmptyState, ErrorText, SectionTitle } from "@/components/ui/primitives";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { repository } from "@/hooks/useCareLog";
 import { formatDateTime, todayISO } from "@/lib/date";
 import { MEAL_SLOT_LABEL, MEAL_TYPE_LABEL, REQUEST_CATEGORY_LABEL } from "@/lib/labels";
@@ -31,6 +32,7 @@ export function LifeRequestPanel({ patientId, requests }: { patientId: string; r
   const [slot, setSlot] = useState<MealSlot>("lunch");
   const [toType, setToType] = useState<MealType>("porridge");
   const [justSent, setJustSent] = useState(false);
+  const submitAction = useAsyncAction();
 
   function pick(c: RequestCategory) {
     setCategory(c);
@@ -45,12 +47,16 @@ export function LifeRequestPanel({ patientId, requests }: { patientId: string; r
       ? `${MEAL_SLOT_LABEL[slot]} 식사를 '${MEAL_TYPE_LABEL[toType]}'(으)로 변경 요청${detail.trim() ? ` · ${detail.trim()}` : ""}`
       : detail.trim();
     if (!text) return;
-    await repository.createRequest({
-      patientId,
-      category,
-      detail: text,
-      mealChange: isMeal ? { date: todayISO(), slot, toType } : undefined,
-    });
+    // 저장 중 연타해도 요청은 1건만 등록 (useAsyncAction이 중복 실행 차단)
+    const res = await submitAction.run(() =>
+      repository.createRequest({
+        patientId,
+        category,
+        detail: text,
+        mealChange: isMeal ? { date: todayISO(), slot, toType } : undefined,
+      }),
+    );
+    if (!res.ok) return;
     setCategory(null);
     setDetail("");
     setJustSent(true);
@@ -123,9 +129,10 @@ export function LifeRequestPanel({ patientId, requests }: { patientId: string; r
             {category === "meal_change" && (
               <p className="text-xs text-slate-500">식사 변경은 즉시 확정되지 않으며, 담당 직원 확인 후 반영됩니다.</p>
             )}
+            <ErrorText>{submitAction.error}</ErrorText>
             <div className="flex gap-2">
-              <Button onClick={() => void submit()} disabled={category !== "meal_change" && !detail.trim()}>
-                요청 보내기
+              <Button onClick={() => void submit()} disabled={submitAction.pending || (category !== "meal_change" && !detail.trim())}>
+                {submitAction.pending ? "보내는 중…" : "요청 보내기"}
               </Button>
               <Button variant="ghost" onClick={() => setCategory(null)}>
                 취소

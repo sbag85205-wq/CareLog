@@ -7,8 +7,10 @@
  * 날짜는 "오늘" 기준 상대값으로 생성되므로 언제 접속해도 최근 데이터처럼 보입니다.
  * 난수는 시드 고정(mulberry32)이라 같은 날 생성하면 항상 같은 결과가 나옵니다.
  */
-import { addDays, todayISO } from "@/lib/date";
+import { addDays, nowISO, seoulDateTimeToISO, todayISO } from "@/lib/date";
+import { DATA_VERSION } from "@/lib/repository/migrate";
 import type {
+  Admission,
   CareLogData,
   CareMode,
   Digestion,
@@ -23,12 +25,18 @@ import type {
   Scale5,
 } from "@/types";
 
-export const DATA_VERSION = 1;
+export { DATA_VERSION };
 
 /** 시연 시 "로그인한" 것으로 간주하는 데모 계정 */
 export const DEMO_PATIENT_ID = "P001";
 export const DEMO_STAFF_ID = "U-STAFF-01";
+/** 다른 병동 담당 의료진 — 담당 환자 필터 검증용 (역할 전환 메뉴에는 나오지 않음) */
+export const DEMO_OTHER_STAFF_ID = "U-STAFF-02";
 export const DEMO_GUARDIAN_ID = "U-GRD-01";
+
+/** 자기기록 입원 시 배정하는 가상 병실 (재입원 시 직전 병실과 다른 곳을 고름) */
+export const DEMO_WARD = "데모병동 7층";
+export const DEMO_ROOMS = ["701호", "702호", "705호", "706호"];
 
 function mulberry32(seed: number) {
   let a = seed;
@@ -72,7 +80,7 @@ const MEMO_SAMPLES = [
 const DIGESTIONS: Digestion[] = ["good", "normal", "normal", "bloated", "heartburn", "nausea"];
 const SYMPTOM_POOL = ["두통", "어지러움", "식욕 저하", "불면", "관절 통증", "변비", "기침"];
 
-function generateRecords(p: RecordProfile, today: string): HealthRecord[] {
+function generateRecords(p: RecordProfile, today: string, nowIso: string): HealthRecord[] {
   const rand = mulberry32(p.seed);
   const out: HealthRecord[] = [];
   for (let daysAgo = p.days; daysAgo >= 0; daysAgo--) {
@@ -89,7 +97,9 @@ function generateRecords(p: RecordProfile, today: string): HealthRecord[] {
       condition <= 3
         ? SYMPTOM_POOL.filter(() => rand() < (condition <= 2 ? 0.35 : 0.15)).slice(0, 3)
         : [];
-    const ts = `${date}T20:${String(Math.floor(rand() * 59)).padStart(2, "0")}:00`;
+    // 기록 시각은 그날 저녁 — 단, 오늘 기록이 아직 오지 않은 시각(미래)이 되지 않도록 현재 시각으로 제한
+    const evening = seoulDateTimeToISO(date, 20, Math.floor(rand() * 59));
+    const ts = evening > nowIso ? nowIso : evening;
     out.push({
       id: `R-${p.patientId}-${date}`,
       patientId: p.patientId,
@@ -146,7 +156,7 @@ export function getMenu(date: string, slot: MealSlot, mealType: MealType): strin
 }
 
 export function createSeedData(today: string = todayISO()): CareLogData {
-  const now = new Date().toISOString();
+  const now = nowISO();
 
   const patients: Patient[] = [
     {
@@ -167,9 +177,6 @@ export function createSeedData(today: string = todayISO()): CareLogData {
       gender: "M",
       department: "내과 (가상)",
       careMode: "inpatient",
-      ward: "데모병동 7층",
-      room: "703호",
-      admissionDate: addDays(today, -12),
       nextVisitDate: addDays(today, 2),
       assignedStaffIds: [DEMO_STAFF_ID],
       isDemo: true,
@@ -192,9 +199,6 @@ export function createSeedData(today: string = todayISO()): CareLogData {
       gender: "M",
       department: "내과 (가상)",
       careMode: "inpatient",
-      ward: "데모병동 7층",
-      room: "708호",
-      admissionDate: addDays(today, -5),
       nextVisitDate: addDays(today, 1),
       assignedStaffIds: [DEMO_STAFF_ID],
       isDemo: true,
@@ -208,6 +212,58 @@ export function createSeedData(today: string = todayISO()): CareLogData {
       careMode: "outpatient",
       nextVisitDate: addDays(today, 14),
       assignedStaffIds: [DEMO_STAFF_ID],
+      isDemo: true,
+    },
+    // 다른 의료진(U-STAFF-02) 담당 — 이케어 간호사 화면에 보이면 안 되는 환자
+    {
+      id: "P006",
+      name: "한다른 (가상)",
+      birthYear: 1955,
+      gender: "M",
+      department: "외과 (가상)",
+      careMode: "inpatient",
+      nextVisitDate: addDays(today, 3),
+      assignedStaffIds: [DEMO_OTHER_STAFF_ID],
+      isDemo: true,
+    },
+  ];
+
+  const ts = (daysAgo: number, hh: number) => seoulDateTimeToISO(addDays(today, -daysAgo), hh, 10);
+  /**
+   * 오늘 생긴 요청·식사 기록은 "지금으로부터 n분 전"으로 생성.
+   * (고정 시각을 쓰면 새벽에 접속했을 때 미래 시각이 되어, 새로 만든 요청이 그 아래로 정렬되던 문제 방지)
+   */
+  const minutesAgo = (n: number) => new Date(Date.parse(now) - n * 60_000).toISOString();
+
+  const admissions: Admission[] = [
+    {
+      id: "AD-P002-1",
+      patientId: "P002",
+      ward: DEMO_WARD,
+      room: "703호",
+      admittedOn: addDays(today, -12),
+      source: "self_reported",
+      createdAt: ts(12, 11),
+      isDemo: true,
+    },
+    {
+      id: "AD-P004-1",
+      patientId: "P004",
+      ward: DEMO_WARD,
+      room: "708호",
+      admittedOn: addDays(today, -5),
+      source: "self_reported",
+      createdAt: ts(5, 11),
+      isDemo: true,
+    },
+    {
+      id: "AD-P006-1",
+      patientId: "P006",
+      ward: "데모병동 9층",
+      room: "902호",
+      admittedOn: addDays(today, -8),
+      source: "self_reported",
+      createdAt: ts(8, 11),
       isDemo: true,
     },
   ];
@@ -224,6 +280,7 @@ export function createSeedData(today: string = todayISO()): CareLogData {
         modeAt: () => "outpatient",
       },
       today,
+      now,
     ),
     // 검토 대상 예시: 평균 컨디션 낮고 기록 충분
     ...generateRecords(
@@ -237,6 +294,7 @@ export function createSeedData(today: string = todayISO()): CareLogData {
         includeToday: true,
       },
       today,
+      now,
     ),
     // 기록 부족 예시
     ...generateRecords(
@@ -249,6 +307,7 @@ export function createSeedData(today: string = todayISO()): CareLogData {
         modeAt: () => "outpatient",
       },
       today,
+      now,
     ),
     // 변화 확인 예시: 최근 1주 급격히 저하
     ...generateRecords(
@@ -262,6 +321,7 @@ export function createSeedData(today: string = todayISO()): CareLogData {
         includeToday: true,
       },
       today,
+      now,
     ),
     // 안정 예시
     ...generateRecords(
@@ -274,6 +334,20 @@ export function createSeedData(today: string = todayISO()): CareLogData {
         modeAt: () => "outpatient",
       },
       today,
+      now,
+    ),
+    // 다른 의료진 담당 환자
+    ...generateRecords(
+      {
+        patientId: "P006",
+        seed: 606,
+        days: 30,
+        coverage: 0.7,
+        baseCondition: () => 3,
+        modeAt: (d) => (d <= 8 ? "inpatient" : "outpatient"),
+      },
+      today,
+      now,
     ),
   ];
 
@@ -331,7 +405,6 @@ export function createSeedData(today: string = todayISO()): CareLogData {
     }),
   ];
 
-  const ts = (daysAgo: number, hh: number) => `${addDays(today, -daysAgo)}T${String(hh).padStart(2, "0")}:10:00`;
 
   const requests: LifeRequest[] = [
     {
@@ -340,8 +413,8 @@ export function createSeedData(today: string = todayISO()): CareLogData {
       category: "water",
       detail: "(데모) 따뜻한 물 한 병 부탁드립니다.",
       status: "received",
-      createdAt: ts(0, 9),
-      updatedAt: ts(0, 9),
+      createdAt: minutesAgo(75),
+      updatedAt: minutesAgo(75),
       isDemo: true,
     },
     {
@@ -350,8 +423,8 @@ export function createSeedData(today: string = todayISO()): CareLogData {
       category: "bedding",
       detail: "(데모) 이불 교체 요청",
       status: "acknowledged",
-      createdAt: ts(0, 8),
-      updatedAt: ts(0, 8),
+      createdAt: minutesAgo(135),
+      updatedAt: minutesAgo(135),
       handledBy: DEMO_STAFF_ID,
       isDemo: true,
     },
@@ -362,8 +435,8 @@ export function createSeedData(today: string = todayISO()): CareLogData {
       detail: "(데모) 저녁을 죽으로 변경 희망",
       status: "received",
       mealChange: { date: today, slot: "dinner", toType: "porridge" },
-      createdAt: ts(0, 10),
-      updatedAt: ts(0, 10),
+      createdAt: minutesAgo(15),
+      updatedAt: minutesAgo(15),
       isDemo: true,
     },
     {
@@ -377,6 +450,16 @@ export function createSeedData(today: string = todayISO()): CareLogData {
       handledBy: DEMO_STAFF_ID,
       isDemo: true,
     },
+    {
+      id: "Q-005",
+      patientId: "P006",
+      category: "water",
+      detail: "(데모) 다른 병동 환자의 물 요청 — 이케어 간호사 화면에는 보이지 않아야 함",
+      status: "received",
+      createdAt: minutesAgo(195),
+      updatedAt: minutesAgo(195),
+      isDemo: true,
+    },
   ];
 
   const mealLogs: MealLog[] = [
@@ -388,7 +471,7 @@ export function createSeedData(today: string = todayISO()): CareLogData {
       mealType: "porridge",
       intake: 50,
       digestion: "bloated",
-      updatedAt: ts(0, 8),
+      updatedAt: minutesAgo(135),
     },
     {
       id: `ML-P004-${today}-breakfast`,
@@ -398,7 +481,7 @@ export function createSeedData(today: string = todayISO()): CareLogData {
       mealType: "regular",
       intake: 25,
       digestion: "nausea",
-      updatedAt: ts(0, 8),
+      updatedAt: minutesAgo(135),
     },
   ];
 
@@ -408,9 +491,11 @@ export function createSeedData(today: string = todayISO()): CareLogData {
     users: [
       { id: "U-PAT-001", name: "김하늘 (가상)", role: "patient", isDemo: true },
       { id: DEMO_STAFF_ID, name: "이케어 간호사 (가상)", role: "staff", isDemo: true },
+      { id: DEMO_OTHER_STAFF_ID, name: "박다른 간호사 (가상, 9층)", role: "staff", isDemo: true },
       { id: DEMO_GUARDIAN_ID, name: "김보호 (가상 보호자)", role: "guardian", relation: "자녀", isDemo: true },
     ],
     patients,
+    admissions,
     records,
     medications,
     visitQuestions: [
