@@ -206,6 +206,9 @@ create type invitation_status as enum ('pending','accepted','revoked','expired')
 | 6 | `0006_rpc.sql` | `set_care_mode()`, `advance_request_status()`, `upsert_meal_intake()`, `invite_guardian()`, `accept_guardian_invitation()`, `revoke_guardian_access()` |
 | — | `supabase/seed.sql` | **가상 데이터만**, 클라우드 개발용 프로젝트에서만 실행 (운영 프로젝트 적용 금지) |
 
+> **2단계 구현 현황 (2026-11-11):** migration 6개와 권한 테스트는 `supabase/`에 있습니다.
+> 적용 절차·검증 방법은 [supabase/README.md](../supabase/README.md)를 따릅니다 (원격 적용은 승인 후).
+
 롤백은 새 마이그레이션을 추가하는 방식(forward-only)으로 합니다. 운영 프로젝트에는 `seed.sql`을 절대 적용하지 않습니다.
 
 **적용 방법 (Docker·CLI 없는 환경, 10장 결정 6):**
