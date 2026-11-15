@@ -33,7 +33,7 @@ Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 · Lucide Re
 
 ```bash
 npm install
-npm run dev                 # http://localhost:3000
+npm run dev                 # http://localhost:3000 (→ /login, 데모는 /demo)
 npm run dev -- -p 3333      # 포트 지정 (공유 서버에서 3000이 사용 중일 때)
 
 npm run lint                # ESLint
@@ -65,7 +65,8 @@ localStorage.removeItem("carelog.dev.latencyMs"); localStorage.removeItem("carel
 
 | 경로 | 내용 |
 | --- | --- |
-| `/` | 기존 가상 데이터 데모 (localStorage, 로그인 없음) |
+| `/` | 첫 화면 이동: 로그인 전 → `/login`, 로그인 후 → `/my` |
+| `/demo` | 기존 가상 데이터 데모 (localStorage, 로그인 없음) |
 | `/login` | **처음 이용하기**(환자 코드 + 생년월일 8자리 → 새 비밀번호) / **로그인**(환자 코드 + 비밀번호) |
 | `/my` | **홈**(오늘 컨디션 기록) · **기록 보기**(7일/30일 컨디션 흐름, 월 달력, 날짜별 기록 수정) — Supabase 저장, 같은 한국 날짜는 1건 수정 |
 
@@ -73,6 +74,8 @@ localStorage.removeItem("carelog.dev.latencyMs"); localStorage.removeItem("carel
 - 환자 화면 디자인(아이보리·세이지)은 `src/components/patient-ui/`의 공통 컴포넌트(버튼·입력창·선택 버튼·상태 표시)를 사용합니다. 데모(`/`) 화면은 기존 `components/ui/primitives.tsx`를 그대로 씁니다.
 - 준비 절차는 [supabase/README.md](supabase/README.md)의 "3단계"를 따릅니다.
 - `npm run test:db` 는 PGlite에서 migration·RLS·로그인 흐름을 검증합니다.
+- `npm run test:e2e:remote` 는 carelog-dev에 검증용 가상 환자를 만들어 브라우저로 확인하고 삭제합니다. `E2E_REMOTE_SERVER=prod` 를 붙이면 배포와 같은 프로덕션 빌드로 실행합니다.
+- 배포(Vercel) 환경변수: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`(Sensitive). 처음 이용하기 실패 원인은 런타임 로그의 `[patient-auth]` 줄로 구분합니다.
 
 ## 폴더 구조
 

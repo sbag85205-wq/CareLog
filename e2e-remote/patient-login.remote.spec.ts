@@ -78,7 +78,9 @@ async function typeSecret(locator: Locator, value: string) {
 }
 
 async function firstUse(page: Page, v: V, birth: string) {
-  await page.goto("/login", { waitUntil: "networkidle" });
+  // 배포 주소(/)를 열면 로그인 전에는 /login 으로 이동
+  await page.goto("/", { waitUntil: "networkidle" });
+  await expect(page).toHaveURL(/\/login$/);
   await page.getByRole("tab", { name: "처음 이용하기" }).click();
   await typeSecret(page.getByLabel("환자 코드"), v.code);
   await typeSecret(page.getByLabel("생년월일 8자리"), birth);
@@ -172,6 +174,9 @@ test("2. A: 코드+생년월일 → 비밀번호 설정 → 저장 → 같은 �
   await page.getByRole("button", { name: "로그인", exact: true }).click();
   await expect(page).toHaveURL(/\/my$/);
   await expect(page.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^2점/ })).toHaveAttribute("aria-pressed", "true");
+  // 로그인 상태에서 배포 주소(/)를 열면 /my 로 이동
+  await page.goto("/", { waitUntil: "networkidle" });
+  await expect(page).toHaveURL(/\/my$/);
   await page.getByRole("button", { name: "로그아웃" }).click();
   await expect(page).toHaveURL(/\/login$/);
 

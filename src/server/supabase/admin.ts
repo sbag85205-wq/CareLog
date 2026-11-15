@@ -10,11 +10,20 @@ import { SUPABASE_URL } from "@/lib/supabase/config";
 let cached: SupabaseClient | null = null;
 
 export function getSecretKey(): string {
-  return process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
+  return (process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
 }
 
+let warned = false;
+
 export function isAdminConfigured(): boolean {
-  return SUPABASE_URL.length > 0 && getSecretKey().length > 20;
+  const key = getSecretKey();
+  // 흔한 배포 실수: 비밀 키 칸에 공개 키(Publishable)를 넣음 → svc_* 호출이 권한 오류로 실패
+  if (key.startsWith("sb_publishable_")) {
+    if (!warned) console.error("[patient-auth] SUPABASE_SECRET_KEY 에 Publishable key가 들어 있습니다. Secret key로 바꿔 주세요.");
+    warned = true;
+    return false;
+  }
+  return SUPABASE_URL.length > 0 && key.length > 20;
 }
 
 export function getAdminClient(): SupabaseClient {

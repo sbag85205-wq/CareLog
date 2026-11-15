@@ -18,6 +18,8 @@ if (!process.env.SUPABASE_SECRET_KEY || !process.env.NEXT_PUBLIC_SUPABASE_PUBLIS
 }
 
 const PORT = Number(process.env.E2E_REMOTE_PORT ?? 3335);
+/** E2E_REMOTE_SERVER=prod → Vercel과 같은 프로덕션 빌드(next build + next start)로 검증 */
+const PROD = process.env.E2E_REMOTE_SERVER === "prod";
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
@@ -37,14 +39,16 @@ export default defineConfig({
   },
   projects: [{ name: "remote", use: { ...devices["Desktop Chrome"], viewport: { width: 390, height: 844 } } }],
   webServer: {
-    command: `npx next dev -p ${PORT} -H 127.0.0.1`,
+    command: PROD
+      ? `npx next build && npx next start -p ${PORT} -H 127.0.0.1`
+      : `npx next dev -p ${PORT} -H 127.0.0.1`,
     env: {
       ...(Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== undefined)) as Record<string, string>),
       CARELOG_NEXT_DIST_DIR: ".next-remote", // 사용자가 띄우는 개발 서버(.next)와 분리
     },
     url: BASE_URL,
     reuseExistingServer: false,
-    timeout: 180_000,
+    timeout: PROD ? 420_000 : 180_000,
     stdout: "ignore",
     stderr: "pipe",
   },

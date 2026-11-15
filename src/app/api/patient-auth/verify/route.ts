@@ -13,15 +13,25 @@ export async function POST(req: NextRequest) {
   if (blocked) return blocked;
 
   return withMinDuration(600, async () => {
-    if (!limiters.verify.hit(clientKey(req))) return json({ ok: false, message: M.verifyFailed }, 429);
+    // 거부 사유는 서버 로그에만 남김 (입력값 없이, 화면 문구는 모두 같음) — Vercel 런타임 로그로 원인 구분
+    if (!limiters.verify.hit(clientKey(req))) {
+      console.warn("[patient-auth] verify 거부: rate_limited (10분 10회 초과)");
+      return json({ ok: false, message: M.verifyFailed }, 429);
+    }
     const body = await readJson(req);
     const code = str(body?.loginCode, 40);
     const birth = str(body?.birthDate, 8);
     const birthIso = birth ? parseBirthDate8(birth, todayISO()) : null;
-    if (!code || !birthIso) return json({ ok: false, message: M.verifyFailed }, 401);
+    if (!code || !birthIso) {
+      console.warn(`[patient-auth] verify 거부: bad_input (${!code ? "코드 없음" : "생년월일 형식"})`);
+      return json({ ok: false, message: M.verifyFailed }, 401);
+    }
 
     const result = await verifyFirstAccess(supabasePatientAuthDeps(), code, birthIso);
-    if (!result.ok) return json({ ok: false, message: result.message }, result.status);
+    if (!result.ok) {
+      if (result.status === 401) console.warn("[patient-auth] verify 거부: not_accepted (코드 형식·불일치·이미 설정·잠금 중 하나)");
+      return json({ ok: false, message: result.message }, result.status);
+    }
 
     (await cookies()).set(SETUP_COOKIE, result.token, {
       httpOnly: true,

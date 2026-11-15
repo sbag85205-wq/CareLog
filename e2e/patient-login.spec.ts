@@ -126,3 +126,13 @@ test("서버 API: DB에 닿지 못해도 원인·입력값 비노출, 다른 출
   expect(noToken.status()).toBe(401);
   expect(await noToken.text()).toContain("처음 이용하기를 다시 진행해 주세요");
 });
+
+test("배포 주소(/) → 로그인 전에는 /login, 기존 데모는 /demo", async ({ page }) => {
+  await stubSupabaseAuth(page);
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("tab", { name: "처음 이용하기" })).toBeVisible();
+  await page.getByRole("link", { name: "가상 데이터 데모" }).click();
+  await expect(page).toHaveURL(/\/demo$/);
+  await expect(page.getByText("님, 안녕하세요").first()).toBeVisible();
+});

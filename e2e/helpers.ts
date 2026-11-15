@@ -29,7 +29,7 @@ export async function setDevFlags(page: Page, flags: { latencyMs?: number; failW
 
 export async function openApp(page: Page) {
   page.on("dialog", (d) => void d.accept());
-  await page.goto("/", { waitUntil: "networkidle" });
+  await page.goto("/demo", { waitUntil: "networkidle" });
   await page.getByText("님, 안녕하세요").waitFor();
 }
 

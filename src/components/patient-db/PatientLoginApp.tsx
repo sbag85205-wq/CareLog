@@ -308,7 +308,7 @@ export function PatientLoginApp() {
               <p>DB 연동 시험 화면 · 가상 환자 계정만 사용하세요. 실명·실제 생년월일은 입력하지 마세요.</p>
               <p>
                 로그인 없이 둘러보기:{" "}
-                <Link href="/" className="font-semibold text-sage-700 underline underline-offset-4">
+                <Link href="/demo" className="font-semibold text-sage-700 underline underline-offset-4">
                   가상 데이터 데모
                 </Link>
               </p>
