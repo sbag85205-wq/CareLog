@@ -177,7 +177,7 @@ insert into public.staff_assignments (patient_id, staff_id) values ('<환자 UUI
 | Supabase CLI | 3.1.0 고정 (`package.json` 정확한 버전) | 인터넷 자료 대부분은 v1/v2 기준 (`--linked`, `link -p`, `--db-url`). 3.x는 `--remote`, `link`에 비밀번호 인자 없음 | 래퍼가 CLI 버전을 확인하고, 다르면 중단. 이 문서는 3.1.0의 `--help`로 확인한 옵션만 사용 |
 | Supabase CLI | `db reset --remote` 존재 | 원격 DB 전체 초기화 위험 | 래퍼에 넣지 않음. 직접 실행 금지 |
 | PostgreSQL | 테스트 PGlite 0.5.16 = PG 18.6 / Supabase 클라우드 = PG 17 (프로젝트 생성 시 확인) | 18에만 있는 문법을 썼다면 원격에서 실패 | 사용한 문법은 PG 15에서도 지원되는 것만 사용 (`make_interval`, `sha256`, `on conflict on constraint`, `cardinality`, `execute function`). `preflight`가 원격 버전 기록, dry-run·적용 시 원격 파서로 재확인 |
-| 권한 모델 | PGlite는 superuser로 migration 적용 / Supabase는 `postgres`(superuser 아님) | `auth.users` 트리거 생성, `supabase_auth_admin` 권한, 테이블 소유자 RLS 우회가 다를 수 있음 | `preflight`의 `can_create_trigger_on_auth_users`, `applier_can_set_role_authenticated` 확인. 적용 후 스모크 테스트로 실제 동작 확인 |
+| 권한 모델 | PGlite는 superuser로 migration 적용 / Supabase는 `postgres`(superuser 아님) | `auth.users` 트리거 생성, `supabase_auth_admin` 권한, 테이블 소유자 RLS 우회가 다를 수 있음 | `preflight`의 `postgres_can_create_trigger_on_auth_users`, `postgres_can_set_role_authenticated`, `postgres_bypassrls_or_owner` 확인 (읽기 전용 조회 계정이 아닌 postgres를 명시해 검사). 적용 후 스모크 테스트로 실제 동작 확인 |
 | auth 구현 | 테스트 shim의 `auth.uid()`·`auth.users`는 최소 재현 | 실제 Supabase Auth의 추가 컬럼·트리거와 상호작용 | 스모크 테스트가 실제 `auth.users`에 가입 → 트리거 → 프로필 생성까지 확인 |
 | 동시성 | PGlite는 연결 1개 | `for update` 잠금 대기를 실제로 겪어 보지 못함 (순차 stale 시나리오만 검증) | 3단계에서 두 브라우저 세션으로 동시 처리 E2E 추가 예정 |
 | 기본 권한 | Supabase는 public의 새 객체에 anon/authenticated 권한 자동 부여 | 다음 migration에서 REVOKE를 빠뜨리면 노출 | shim이 같은 기본 권한을 재현하고, 테스트와 `verify-catalog`가 anon 권한 0을 검사 |

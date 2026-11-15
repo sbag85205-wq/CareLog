@@ -13,18 +13,24 @@ from (
     ('role_authenticated_exists', exists (select 1 from pg_roles where rolname = 'authenticated'), ''),
     ('role_service_role_exists', exists (select 1 from pg_roles where rolname = 'service_role'), ''),
     ('role_supabase_auth_admin_exists', exists (select 1 from pg_roles where rolname = 'supabase_auth_admin'), ''),
-    -- 적용 계정이 auth.users에 가입 트리거를 만들 수 있는지 (Supabase 권한 정책 변경 대비)
-    ('can_create_trigger_on_auth_users',
-      coalesce(has_table_privilege(current_user, 'auth.users', 'TRIGGER'), false),
-      current_user),
+    -- migration 적용 계정(postgres)이 auth.users에 가입 트리거를 만들 수 있는지
+    -- ※ --read-only 조회는 supabase_read_only_user로 실행되므로 current_user가 아닌 postgres를 명시해 검사
+    ('postgres_can_create_trigger_on_auth_users',
+      coalesce(has_table_privilege('postgres', 'auth.users', 'TRIGGER'), false),
+      '검사 대상: postgres (조회 계정: ' || current_user || ')'),
     ('auth_users_required_columns',
       (select count(*) = 4 from information_schema.columns
         where table_schema = 'auth' and table_name = 'users'
           and column_name in ('id', 'email', 'email_confirmed_at', 'raw_user_meta_data')),
       'id, email, email_confirmed_at, raw_user_meta_data'),
     ('auth_uid_function_exists', to_regprocedure('auth.uid()') is not null, ''),
-    -- 적용 계정의 RLS 우회 여부: 테이블 소유자이므로 security definer 함수가 RLS 영향 없이 동작
-    ('applier_can_set_role_authenticated', pg_has_role(current_user, 'authenticated', 'MEMBER'), current_user),
+    -- postgres가 authenticated로 전환 가능해야 적용 후 스모크 테스트(SET ROLE authenticated)를 실행할 수 있음
+    ('postgres_can_set_role_authenticated', pg_has_role('postgres', 'authenticated', 'MEMBER'),
+      '검사 대상: postgres'),
+    -- 테이블 소유자(postgres)의 RLS 우회 속성: security definer 함수 내부 조회가 RLS에 막히지 않음
+    ('postgres_bypassrls_or_owner',
+      coalesce((select rolbypassrls or rolsuper from pg_roles where rolname = 'postgres'), false),
+      (select 'bypassrls=' || rolbypassrls || ', superuser=' || rolsuper from pg_roles where rolname = 'postgres')),
     ('gen_random_uuid_available', to_regprocedure('gen_random_uuid()') is not null, ''),
     ('sha256_available', to_regprocedure('sha256(bytea)') is not null, ''),
     -- 새 개발 프로젝트여야 함: CareLog 객체가 아직 없어야 충돌 없이 적용됨
