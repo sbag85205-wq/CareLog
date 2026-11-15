@@ -52,24 +52,24 @@ test("처음 이용하기: 확인 실패 → 확인 성공 → 비밀번호 규�
   await expect(page.getByLabel("생년월일 8자리")).toHaveValue("19700101");
 
   // 연타해도 요청은 1번
-  await page.getByRole("button", { name: "확인", exact: true }).dblclick();
+  await page.getByRole("button", { name: "본인 확인하고 시작하기" }).dblclick();
   await expect(page.getByRole("alert").filter({ hasText: MSG.verifyFailed })).toBeVisible();
   expect(verifyCalls).toBe(1);
   await expect(page.getByLabel("생년월일 8자리")).toHaveValue(""); // 생년월일은 화면에 남기지 않음
 
   await page.getByLabel("생년월일 8자리").fill("19700101");
-  await page.getByRole("button", { name: "확인", exact: true }).click();
+  await page.getByRole("button", { name: "본인 확인하고 시작하기" }).click();
   await expect(page.getByText("10분 안에 새 비밀번호를 설정해 주세요")).toBeVisible();
   await expect(page.getByLabel("생년월일 8자리")).toHaveCount(0);
 
-  await page.getByLabel("새 비밀번호").fill("abcdefgh");
-  await page.getByLabel("비밀번호 확인").fill("abcdefgh");
-  await page.getByRole("button", { name: "비밀번호 설정하고 시작하기" }).click();
+  await page.getByLabel("새 비밀번호", { exact: true }).fill("abcdefgh");
+  await page.getByLabel("새 비밀번호 확인").fill("abcdefgh");
+  await page.getByRole("button", { name: "설정하고 내 건강기록으로" }).click();
   await expect(page.getByRole("alert").filter({ hasText: "영문과 숫자" })).toBeVisible();
 
-  await page.getByLabel("새 비밀번호").fill("carelog2026a");
-  await page.getByLabel("비밀번호 확인").fill("carelog2026a");
-  await page.getByRole("button", { name: "비밀번호 설정하고 시작하기" }).click();
+  await page.getByLabel("새 비밀번호", { exact: true }).fill("carelog2026a");
+  await page.getByLabel("새 비밀번호 확인").fill("carelog2026a");
+  await page.getByRole("button", { name: "설정하고 내 건강기록으로" }).click();
   await expect(page.getByText(MSG.setupDone)).toBeVisible();
   await expect(page.getByRole("tab", { name: "로그인" })).toHaveAttribute("aria-selected", "true");
 

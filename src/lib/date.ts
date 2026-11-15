@@ -136,3 +136,27 @@ export function formatDateTime(isoDateTime: string): string {
   );
   return `${parts.month}/${parts.day} ${parts.hour}:${parts.minute}`;
 }
+
+const WEEKDAY_FULL = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
+
+/** "2026년 11월 15일 일요일" (withYear=false → "11월 15일 일요일") */
+export function formatLongKoreanDate(iso: string, withYear = true): string {
+  const d = parseISODate(iso);
+  const md = `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 ${WEEKDAY_FULL[d.getUTCDay()]}`;
+  return withYear ? `${d.getUTCFullYear()}년 ${md}` : md;
+}
+
+/** "11.09" — 기간 표시용 */
+export function formatDotDate(iso: string): string {
+  return `${iso.slice(5, 7)}.${iso.slice(8, 10)}`;
+}
+
+/** 저장 시각(UTC ISO) → "오후 8:10" (한국 시간, 실행 환경의 ICU 언어 데이터와 무관) */
+export function formatKoreanTime(isoDateTime: string): string {
+  const parts = Object.fromEntries(
+    dateTimeFormatter.formatToParts(new Date(timestampValue(isoDateTime))).map((p) => [p.type, p.value]),
+  );
+  const h = Number(parts.hour) % 24;
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h < 12 ? "오전" : "오후"} ${h12}:${parts.minute}`;
+}

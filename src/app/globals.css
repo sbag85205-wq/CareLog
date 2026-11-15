@@ -8,6 +8,23 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  /* 환자 화면 리뉴얼 팔레트 (따뜻한 아이보리 + 파스텔 세이지) — /login, /my 에서 사용 */
+  --color-ivory: #f8f6f0;
+  --color-ivory-deep: #efece4;
+  --color-line: #e5e1d6;
+  --color-ink: #24302a;
+  --color-ink-soft: #66706a;
+  --color-sage-50: #f1f6f1;
+  --color-sage-100: #e0ebe1;
+  --color-sage-200: #c8dbcb;
+  --color-sage-300: #a7c4ad;
+  --color-sage-500: #6a967a;
+  --color-sage-600: #4f7d62;
+  --color-sage-700: #3e6b55;
+  --color-sage-800: #315744;
+  --color-sage-900: #263f33;
+  --color-blush-50: #fbf0ee;
+  --color-blush-700: #9a4a3f;
   --font-sans: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, -apple-system,
     "Segoe UI", sans-serif;
 }

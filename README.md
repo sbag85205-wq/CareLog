@@ -67,9 +67,10 @@ localStorage.removeItem("carelog.dev.latencyMs"); localStorage.removeItem("carel
 | --- | --- |
 | `/` | 기존 가상 데이터 데모 (localStorage, 로그인 없음) |
 | `/login` | **처음 이용하기**(환자 코드 + 생년월일 8자리 → 새 비밀번호) / **로그인**(환자 코드 + 비밀번호) |
-| `/my` | 로그인한 가상 환자의 오늘 컨디션 기록·기록 조회 (Supabase 저장, 같은 한국 날짜는 1건 수정) |
+| `/my` | **홈**(오늘 컨디션 기록) · **기록 보기**(7일/30일 컨디션 흐름, 월 달력, 날짜별 기록 수정) — Supabase 저장, 같은 한국 날짜는 1건 수정 |
 
 - Supabase 설정이 없으면 `/login`은 "설정 없음" 안내만 표시합니다.
+- 환자 화면 디자인(아이보리·세이지)은 `src/components/patient-ui/`의 공통 컴포넌트(버튼·입력창·선택 버튼·상태 표시)를 사용합니다. 데모(`/`) 화면은 기존 `components/ui/primitives.tsx`를 그대로 씁니다.
 - 준비 절차는 [supabase/README.md](supabase/README.md)의 "3단계"를 따릅니다.
 - `npm run test:db` 는 PGlite에서 migration·RLS·로그인 흐름을 검증합니다.
 

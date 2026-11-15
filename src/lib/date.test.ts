@@ -77,3 +77,15 @@ describe("저장 시각 (UTC ISO 8601)", () => {
     ]);
   });
 });
+
+describe("환자 화면 날짜 표시", () => {
+  it("긴 날짜·요일, 기간용 날짜, 한국 시각", async () => {
+    const { formatLongKoreanDate, formatDotDate, formatKoreanTime } = await import("./date");
+    expect(formatLongKoreanDate("2026-11-15")).toBe("2026년 11월 15일 일요일");
+    expect(formatLongKoreanDate("2026-11-15", false)).toBe("11월 15일 일요일");
+    expect(formatDotDate("2026-11-09")).toBe("11.09");
+    // UTC 11:10 → 한국 20:10
+    expect(formatKoreanTime("2026-11-15T11:10:00.000Z")).toBe("오후 8:10");
+    expect(formatKoreanTime("2026-11-14T23:05:00Z")).toBe("오전 8:05");
+  });
+});

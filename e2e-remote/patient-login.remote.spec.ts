@@ -11,6 +11,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { todayISO } from "../src/lib/date";
 import { generateLoginCode } from "../src/lib/patient-auth/rules";
+import { expectNoHorizontalOverflow } from "../e2e/helpers";
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const PUB = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
@@ -81,16 +82,16 @@ async function firstUse(page: Page, v: V, birth: string) {
   await page.getByRole("tab", { name: "처음 이용하기" }).click();
   await typeSecret(page.getByLabel("환자 코드"), v.code);
   await typeSecret(page.getByLabel("생년월일 8자리"), birth);
-  await page.getByRole("button", { name: "확인", exact: true }).click();
+  await page.getByRole("button", { name: "본인 확인하고 시작하기" }).click();
 }
 
 async function setPasswordAndEnter(page: Page, v: V) {
   await expect(page.getByText("10분 안에 새 비밀번호를 설정해 주세요")).toBeVisible();
-  await typeSecret(page.getByLabel("새 비밀번호"), v.password);
-  await typeSecret(page.getByLabel("비밀번호 확인"), v.password);
-  await page.getByRole("button", { name: "비밀번호 설정하고 시작하기" }).click();
+  await typeSecret(page.getByLabel("새 비밀번호", { exact: true }), v.password);
+  await typeSecret(page.getByLabel("새 비밀번호 확인"), v.password);
+  await page.getByRole("button", { name: "설정하고 내 건강기록으로" }).click();
   await expect(page).toHaveURL(/\/my$/);
-  await expect(page.getByRole("heading", { name: `가상 검증 ${v.label} (자동 삭제)님, 안녕하세요` })).toBeVisible();
+  await expect(page.getByRole("heading", { name: `가상 검증 ${v.label} (자동 삭제) 님, 안녕하세요.` })).toBeVisible();
 }
 
 async function fillCondition(page: Page, score: number) {
@@ -181,7 +182,7 @@ test("2. A: 코드+생년월일 → 비밀번호 설정 → 저장 → 같은 �
 test("3. 설정 후에는 생년월일로 다시 설정할 수 없음 (같은 안내 문구)", async ({ page }) => {
   await firstUse(page, A, A.birth);
   await expect(page.getByRole("alert").filter({ hasText: VERIFY_FAILED })).toBeVisible();
-  await expect(page.getByLabel("새 비밀번호")).toHaveCount(0);
+  await expect(page.getByLabel("새 비밀번호", { exact: true })).toHaveCount(0);
   // 기존 비밀번호는 그대로 유효
   const s = await userSession(A.email, A.password);
   await s.auth.signOut();
@@ -193,11 +194,21 @@ test("4. B: 잘못된 생년월일은 같은 문구로 거부 → 올바르게 �
 
   await page.getByLabel("생년월일 8자리").waitFor();
   await typeSecret(page.getByLabel("생년월일 8자리"), B.birth);
-  await page.getByRole("button", { name: "확인", exact: true }).click();
+  await page.getByRole("button", { name: "본인 확인하고 시작하기" }).click();
   await setPasswordAndEnter(page, B);
   await fillCondition(page, 3);
   await page.getByRole("button", { name: "기록 저장" }).click();
   await expect(page.getByText("저장되었습니다")).toBeVisible();
+  await expectNoHorizontalOverflow(page); // 모바일 홈
+
+  // 모바일 기록 보기: 오늘 기록이 달력·상세에 보임
+  await page.getByRole("navigation", { name: "환자 메뉴" }).getByRole("button", { name: "기록 보기" }).click();
+  await expect(page.getByRole("heading", { name: "나의 기록" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "컨디션 흐름" })).toBeVisible();
+  await expect(page.getByText("기록 완료")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await page.getByRole("group", { name: "기간 선택" }).getByRole("button", { name: "30일" }).click();
+  await expectNoHorizontalOverflow(page);
 
   const sa = await userSession(A.email, A.password);
   const sb = await userSession(B.email, B.password);
@@ -224,4 +235,32 @@ test("5. 로그인 사용자 세션으로 서버 전용 함수 호출 불가", a
     const { error } = await sa.rpc(fn, args);
     expect(error, fn).not.toBeNull();
   }
+});
+
+test("6. PC 화면: 로그인 → 기록 보기에서 오늘 기록 수정 (1건 유지), 화면 잘림 없음", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.goto("/login", { waitUntil: "networkidle" });
+  await expectNoHorizontalOverflow(page);
+  await typeSecret(page.getByLabel("환자 코드"), B.code);
+  await typeSecret(page.getByLabel("비밀번호", { exact: true }), B.password);
+  await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(page).toHaveURL(/\/my$/);
+  await expect(page.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^3점/ })).toHaveAttribute("aria-pressed", "true");
+  await expectNoHorizontalOverflow(page);
+
+  await page.getByRole("navigation", { name: "환자 메뉴" }).getByRole("button", { name: "기록 보기" }).click();
+  await page.getByRole("button", { name: "이 날짜의 기록 수정" }).click();
+  const sheet = page.getByRole("dialog");
+  await sheet.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^5점/ }).click();
+  await sheet.getByRole("button", { name: "기록 수정" }).click();
+  await expect(sheet).toHaveCount(0); // 저장이 확정되면 닫힘
+  await expect(page.getByText("아주 좋아요").first()).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  const sb = await userSession(B.email, B.password);
+  const rows = await todayRows(sb, B.pid);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].condition).toBe(5);
+  await page.getByRole("button", { name: "로그아웃" }).click();
+  await expect(page).toHaveURL(/\/login$/);
 });

@@ -1,10 +1,8 @@
 "use client";
 
 import { Angry, CheckCircle2, Frown, Laugh, Meh, Save, Smile } from "lucide-react";
-import { useState } from "react";
 import { Button, ChoiceGroup, cn, ErrorText } from "@/components/ui/primitives";
-import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { useRepository } from "@/hooks/repository-context";
+import { useConditionDraft, type ConditionDraftProps } from "@/components/health/useConditionDraft";
 import {
   CONDITION_FACE,
   DIGESTION_LABEL,
@@ -13,74 +11,21 @@ import {
   SLEEP_LABEL,
   SYMPTOM_OPTIONS,
 } from "@/lib/labels";
-import type { CareMode, Digestion, HealthRecord, MealIntake, Scale5 } from "@/types";
+import type { Digestion, Scale5 } from "@/types";
 
 const FACES = [Angry, Frown, Meh, Smile, Laugh];
 const SCALE: Scale5[] = [1, 2, 3, 4, 5];
 
-interface Props {
-  patientId: string;
-  date: string;
-  mode: CareMode;
-  existing?: HealthRecord;
-  onSaved?: () => void;
-}
-
 /**
- * 오늘의 컨디션 기록 폼 (통원·입원 공용).
+ * 오늘의 컨디션 기록 폼 (데모 화면 · 통원·입원 공용).
  * 같은 환자·날짜에 기록이 있으면 수정, 없으면 새로 저장합니다.
  * 부모에서 key를 바꿔 주면 초기값이 다시 설정됩니다.
+ * 입력 상태·저장 로직은 useConditionDraft (환자 DB 화면 폼과 공유)
  */
-export function ConditionForm({ patientId, date, mode, existing, onSaved }: Props) {
-  const [condition, setCondition] = useState<Scale5 | undefined>(existing?.condition);
-  const [pain, setPain] = useState<number>(existing?.pain ?? 0);
-  const [fatigue, setFatigue] = useState<Scale5 | undefined>(existing?.fatigue);
-  const [sleep, setSleep] = useState<Scale5 | undefined>(existing?.sleep);
-  const [mealIntake, setMealIntake] = useState<MealIntake | undefined>(existing?.mealIntake);
-  const [digestion, setDigestion] = useState<Digestion | undefined>(existing?.digestion);
-  const [symptoms, setSymptoms] = useState<string[]>(existing?.symptoms ?? []);
-  const [memo, setMemo] = useState(existing?.memo ?? "");
-  const [saved, setSaved] = useState(false);
-  const saveAction = useAsyncAction();
-  // 데모: localStorage 저장소 / DB 모드: Supabase 저장소 (RepositoryContext로 주입)
-  const repository = useRepository();
-
-  const missing = [
-    !condition && "컨디션",
-    !fatigue && "피로도",
-    !sleep && "수면",
-    mealIntake === undefined && "식사량",
-    !digestion && "소화 상태",
-  ].filter(Boolean) as string[];
-
-  async function save() {
-    if (missing.length) return;
-    // 저장이 확정된 뒤에만 폼을 닫음 — 실패하면 입력 내용을 그대로 두고 오류 안내
-    const res = await saveAction.run(() => repository.upsertHealthRecord({
-      patientId,
-      date,
-      condition: condition!,
-      pain,
-      fatigue: fatigue!,
-      sleep: sleep!,
-      mealIntake: mealIntake!,
-      digestion: digestion!,
-      symptoms,
-      memo: memo.trim(),
-      recordedIn: existing?.recordedIn ?? mode,
-    }));
-    if (!res.ok) return;
-    setSaved(true);
-    onSaved?.();
-  }
-
-  const toggleSymptom = (s: string) =>
-    setSymptoms((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]));
-
-  const touch = <T,>(setter: (v: T) => void) => (v: T) => {
-    setSaved(false);
-    setter(v);
-  };
+export function ConditionForm(props: ConditionDraftProps) {
+  const draft = useConditionDraft(props);
+  const { condition, pain, fatigue, sleep, mealIntake, digestion, symptoms, memo } = draft.values;
+  const { missing, saved, save } = draft;
 
   return (
     <form
@@ -94,7 +39,7 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
         <ChoiceGroup
           ariaLabel="오늘 컨디션"
           value={condition}
-          onChange={touch(setCondition)}
+          onChange={draft.set.condition}
           options={SCALE.map((v) => {
             const Icon = FACES[v - 1];
             return {
@@ -119,7 +64,7 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
             max={10}
             step={1}
             value={pain}
-            onChange={(e) => touch(setPain)(Number(e.target.value))}
+            onChange={(e) => draft.set.pain(Number(e.target.value))}
             aria-label="통증 점수"
             className="h-3 flex-1 cursor-pointer accent-teal-500"
           />
@@ -146,7 +91,7 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
             size="sm"
             columns="grid-cols-5"
             value={fatigue}
-            onChange={touch(setFatigue)}
+            onChange={draft.set.fatigue}
             options={SCALE.map((v) => ({ value: v, label: `${v}`, sub: FATIGUE_LABEL[v] }))}
           />
         </Field>
@@ -156,7 +101,7 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
             size="sm"
             columns="grid-cols-5"
             value={sleep}
-            onChange={touch(setSleep)}
+            onChange={draft.set.sleep}
             options={SCALE.map((v) => ({ value: v, label: `${v}`, sub: SLEEP_LABEL[v] }))}
           />
         </Field>
@@ -168,7 +113,7 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
           size="sm"
           columns="grid-cols-5"
           value={mealIntake}
-          onChange={touch(setMealIntake)}
+          onChange={draft.set.mealIntake}
           options={MEAL_INTAKE_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
         />
       </Field>
@@ -179,7 +124,7 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
           size="sm"
           columns="grid-cols-3 sm:grid-cols-6"
           value={digestion}
-          onChange={touch(setDigestion)}
+          onChange={draft.set.digestion}
           options={(Object.keys(DIGESTION_LABEL) as Digestion[]).map((k) => ({ value: k, label: DIGESTION_LABEL[k] }))}
         />
       </Field>
@@ -190,7 +135,7 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
           size="sm"
           columns="grid-cols-3 sm:grid-cols-4 lg:grid-cols-6"
           value={symptoms}
-          onChange={touch(toggleSymptom)}
+          onChange={draft.set.toggleSymptom}
           options={SYMPTOM_OPTIONS.map((s) => ({ value: s, label: s }))}
         />
       </Field>
@@ -198,7 +143,7 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
       <Field label="메모">
         <textarea
           value={memo}
-          onChange={(e) => touch(setMemo)(e.target.value)}
+          onChange={(e) => draft.set.memo(e.target.value)}
           rows={3}
           maxLength={500}
           placeholder="오늘 특별히 기억할 내용을 적어 주세요 (가상 데이터만 입력)"
@@ -206,7 +151,7 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
         />
       </Field>
 
-      <ErrorText>{saveAction.error}</ErrorText>
+      <ErrorText>{draft.error}</ErrorText>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-slate-500" aria-live="polite">
           {saved ? (
@@ -219,8 +164,8 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
             "모든 항목을 입력했어요"
           )}
         </p>
-        <Button type="submit" size="lg" icon={Save} disabled={missing.length > 0 || saveAction.pending}>
-          {saveAction.pending ? "저장 중…" : existing ? "기록 수정" : "기록 저장"}
+        <Button type="submit" size="lg" icon={Save} disabled={missing.length > 0 || draft.pending}>
+          {draft.pending ? "저장 중…" : draft.isEdit ? "기록 수정" : "기록 저장"}
         </Button>
       </div>
     </form>
