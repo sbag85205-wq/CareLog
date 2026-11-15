@@ -42,10 +42,12 @@ beforeAll(async () => {
     await as(db, "service_role", "select private.admin_set_role($1, 'staff')", [s.id]);
   }
 
-  // 환자 프로필은 각자 RPC로 생성
-  pidA = (await as<{ id: string }>(db, patientA, "select id from public.create_my_patient_profile('환자A (가상)')"))[0].id;
-  pidB = (await as<{ id: string }>(db, patientB, "select id from public.create_my_patient_profile('환자B (가상)')"))[0].id;
-  pidC = (await as<{ id: string }>(db, patientC, "select id from public.create_my_patient_profile('환자C (가상)')"))[0].id;
+  // 환자 프로필은 서버(service_role)가 발급 — migration 7부터 가입자의 자가 생성 경로 없음
+  const issue = async (u: U, name: string) =>
+    (await as<{ id: string }>(db, "service_role", "insert into public.patients (profile_id, display_name) values ($1, $2) returning id", [u.id, name]))[0].id;
+  pidA = await issue(patientA, "환자A (가상)");
+  pidB = await issue(patientB, "환자B (가상)");
+  pidC = await issue(patientC, "환자C (가상)");
 
   // 담당 배정은 서버(service_role)만
   await as(
@@ -338,12 +340,50 @@ describe("4. 권한 상승 시도 차단", () => {
     expect(await expectFail(as(db, patientA, "insert into public.staff_assignments (patient_id, staff_id) values ($1, $2)", [pidB, patientA.id]))).toMatch(/permission denied/);
     expect(await expectFail(as(db, stranger, "insert into public.access_grants (patient_id, grantee_id, scopes) values ($1, $2, '{records}')", [pidA, stranger.id]))).toMatch(/permission denied/);
   });
-  it("의료진 계정은 환자 프로필을 만들 수 없고, 환자는 프로필을 두 개 만들 수 없음", async () => {
-    expect(await expectFail(as(db, staffA, "select public.create_my_patient_profile('x')"))).toMatch(/forbidden/);
-    expect(await expectFail(as(db, patientA, "select public.create_my_patient_profile('x')"))).toMatch(/이미 환자 프로필/);
+  it("일반 사용자(환자·의료진·외부인)는 환자 프로필을 직접 만들 수 없음 — 서버 발급만 (migration 7)", async () => {
+    for (const u of [patientA, staffA, stranger]) {
+      expect(await expectFail(as(db, u, "select public.create_my_patient_profile('x')"))).toMatch(/permission denied/);
+      expect(await expectFail(as(db, u, "insert into public.patients (profile_id, display_name) values ($1, 'x')", [u.id]))).toMatch(/permission denied/);
+    }
   });
   it("관리자가 아닌 계정으로는 담당자 지정 대상이 될 수 없음", async () => {
     expect(await expectFail(as(db, "service_role", "insert into public.staff_assignments (patient_id, staff_id) values ($1, $2)", [pidA, stranger.id]))).toMatch(/의료진 계정만/);
+  });
+});
+
+describe("Security Advisor: 로그인 사용자가 실행 가능한 SECURITY DEFINER 함수 10개 — 내부 역할·소유권 검사", () => {
+  it("관계없는 로그인 사용자가 환자 A의 ID로 호출하면 모두 거부되고 데이터는 그대로", async () => {
+    const inv = (await as<{ j: { invitation_id: string } }>(db, patientA, "select public.invite_guardian($1, 'pending-check@example.test', '{records}') j", [pidA]))[0].j;
+    const snapshot = async () =>
+      as(db, "superuser", `select
+        (select count(*) from public.admissions) adm, (select count(*) from public.staff_reviews) rv,
+        (select string_agg(status::text || version, ',' order by id) from public.life_requests) req,
+        (select string_agg(visible_to_guardian::text, ',' order by id) from public.medications) med,
+        (select string_agg(status::text, ',' order by id) from public.guardian_invitations) inv,
+        (select string_agg(coalesce(revoked_at::text, '-') || array_to_string(scopes, '+'), ',' order by id) from public.access_grants) grants,
+        (select count(*) from public.patients) pts`);
+    const before = await snapshot();
+    const calls: [string, string, unknown[]][] = [
+      ["create_my_patient_profile", "select public.create_my_patient_profile('x')", []],
+      ["set_care_mode", "select public.set_care_mode($1, 'inpatient')", [pidA]],
+      ["advance_request_status", "select public.advance_request_status($1, 'received', 'acknowledged')", [reqMealA]],
+      ["add_staff_review", "select public.add_staff_review($1, 'checked')", [pidA]],
+      ["set_medication_guardian_visibility", "select public.set_medication_guardian_visibility($1, false)", [medA1]],
+      ["invite_guardian", "select public.invite_guardian($1, 'x@example.test', '{records}')", [pidA]],
+      ["accept_guardian_invitation", "select public.accept_guardian_invitation($1)", ["0".repeat(64)]],
+      ["revoke_guardian_invitation", "select public.revoke_guardian_invitation($1)", [inv.invitation_id]],
+      ["update_guardian_scopes", "select public.update_guardian_scopes($1, '{records}')", [grantId]],
+      ["revoke_guardian_access", "select public.revoke_guardian_access($1)", [grantId]],
+    ];
+    expect(calls).toHaveLength(10);
+    for (const [name, sql, params] of calls) {
+      const msg = await expectFail(as(db, stranger, sql, params));
+      expect(msg, name).toMatch(/permission denied|forbidden|not_found|invalid_input/);
+    }
+    expect(await snapshot()).toEqual(before);
+    // 초대는 환자 본인만 취소 가능
+    await as(db, patientA, "select public.revoke_guardian_invitation($1)", [inv.invitation_id]);
+    expect((await as<{ status: string }>(db, "superuser", "select status from public.guardian_invitations where id = $1", [inv.invitation_id]))[0].status).toBe("revoked");
   });
 });
 

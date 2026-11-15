@@ -61,6 +61,18 @@ localStorage.removeItem("carelog.dev.latencyMs"); localStorage.removeItem("carel
 
 상단 **데모 데이터 초기화** 버튼으로 가상 데이터를 처음 상태로 되돌릴 수 있습니다.
 
+### 환자 로그인 (DB 연동 시험, carelog-dev)
+
+| 경로 | 내용 |
+| --- | --- |
+| `/` | 기존 가상 데이터 데모 (localStorage, 로그인 없음) |
+| `/login` | **처음 이용하기**(환자 코드 + 생년월일 8자리 → 새 비밀번호) / **로그인**(환자 코드 + 비밀번호) |
+| `/my` | 로그인한 가상 환자의 오늘 컨디션 기록·기록 조회 (Supabase 저장, 같은 한국 날짜는 1건 수정) |
+
+- Supabase 설정이 없으면 `/login`은 "설정 없음" 안내만 표시합니다.
+- 준비 절차는 [supabase/README.md](supabase/README.md)의 "3단계"를 따릅니다.
+- `npm run test:db` 는 PGlite에서 migration·RLS·로그인 흐름을 검증합니다.
+
 ## 폴더 구조
 
 ```text

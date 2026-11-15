@@ -2,6 +2,8 @@ import path from "node:path";
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // E2E는 별도 빌드 폴더 사용 → 사용자가 띄운 개발 서버(.next/dev/lock)와 충돌하지 않음
+  distDir: process.env.CARELOG_NEXT_DIST_DIR || ".next",
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

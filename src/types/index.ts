@@ -47,7 +47,8 @@ export interface Patient {
   nextVisitDate?: string;
   /** 담당 의료진 사용자 ID */
   assignedStaffIds: string[];
-  isDemo: true;
+  /** 앱 내장 데모 시드 여부 (DB 모드의 가상 환자는 false) */
+  isDemo: boolean;
 }
 
 /** 입원 기록 출처: 환자 자기기록 / (향후) 병원 확인 */

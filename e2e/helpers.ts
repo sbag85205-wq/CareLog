@@ -1,10 +1,17 @@
 import { expect, type Page } from "@playwright/test";
 
-/** 콘솔 오류 수집 — 각 테스트 끝에서 0건인지 확인 */
-export function trackConsoleErrors(page: Page) {
+/**
+ * 콘솔 오류 수집 — 각 테스트 끝에서 0건인지 확인
+ * @param expectedHttpErrors 테스트가 일부러 돌려주는 HTTP 오류 상태 (브라우저의 "Failed to load resource" 기록만 제외)
+ */
+export function trackConsoleErrors(page: Page, expectedHttpErrors: number[] = []) {
   const errors: string[] = [];
   page.on("console", (m) => {
-    if (m.type() === "error") errors.push(m.text());
+    if (m.type() !== "error") return;
+    const expected = expectedHttpErrors.some((s) =>
+      m.text().startsWith(`Failed to load resource: the server responded with a status of ${s} `),
+    );
+    if (!expected) errors.push(m.text());
   });
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   return {

@@ -5,7 +5,9 @@ export type CareLogErrorCode =
   | "not_found"
   | "invalid_input"
   | "write_failed" // 저장 실패 (네트워크 등)
-  | "cancelled"; // 데모 초기화 등으로 취소됨
+  | "cancelled" // 데모 초기화 등으로 취소됨
+  | "forbidden" // 권한 없음 (DB 모드: RLS 거부)
+  | "not_supported"; // DB 모드에서 아직 연결하지 않은 기능
 
 export class CareLogError extends Error {
   constructor(

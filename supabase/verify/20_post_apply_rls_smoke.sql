@@ -39,15 +39,18 @@ begin
   perform set_config('carelog.email_gd', format('carelog-smoke-%s-gd@example.invalid', sfx), true);
 end $$;
 
--- ── 환자 A·B: 프로필 생성 ──────────────────────────────────────────────────
-set local role authenticated;
-select set_config('request.jwt.claims',
-  json_build_object('sub', current_setting('carelog.ids')::jsonb ->> 'pa', 'role', 'authenticated')::text, true);
-select set_config('carelog.pid_a', (public.create_my_patient_profile('가상 환자A')).id::text, true);
-select set_config('request.jwt.claims',
-  json_build_object('sub', current_setting('carelog.ids')::jsonb ->> 'pb', 'role', 'authenticated')::text, true);
-select set_config('carelog.pid_b', (public.create_my_patient_profile('가상 환자B')).id::text, true);
-reset role;
+-- ── 환자 A·B: 서버(적용 계정)가 환자 프로필 발급 — migration 7부터 가입자 자가 생성 불가 ──
+do $$
+declare
+  ids jsonb := current_setting('carelog.ids')::jsonb;
+  v_a uuid;
+  v_b uuid;
+begin
+  insert into public.patients (profile_id, display_name) values ((ids ->> 'pa')::uuid, '가상 환자A') returning id into v_a;
+  insert into public.patients (profile_id, display_name) values ((ids ->> 'pb')::uuid, '가상 환자B') returning id into v_b;
+  perform set_config('carelog.pid_a', v_a::text, true);
+  perform set_config('carelog.pid_b', v_b::text, true);
+end $$;
 
 -- ── 관리자 작업: 담당 배정, 약 등록(공개로 넣어도 비공개로 저장돼야 함) ──────
 do $$
@@ -98,6 +101,12 @@ begin
   begin
     update public.life_requests set status = 'completed' where patient_id = pid_a;
     raise exception 'FAIL: 환자가 요청 상태를 직접 변경함';
+  exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
+  end;
+
+  begin
+    perform public.create_my_patient_profile('가상 추가 프로필');
+    raise exception 'FAIL: 가입자가 환자 프로필을 직접 생성함';
   exception when others then if sqlerrm like 'FAIL:%' then raise; end if;
   end;
 

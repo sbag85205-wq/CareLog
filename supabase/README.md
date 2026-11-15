@@ -17,9 +17,11 @@ supabase/
 │   ├── 20261111040239_record_tables.sql   4/6 health_records, medications, drug_info_cache, visit_questions,
 │   │                                           meal_menus, meal_logs, life_requests, staff_reviews, staff_review_notes
 │   ├── 20261111040240_rls_policies.sql    5/6 GRANT(컬럼 단위 포함) + RLS 정책
-│   └── 20261111040241_rpc_functions.sql   6/6 RPC + 함수 실행 권한 정리
+│   ├── 20261111040241_rpc_functions.sql   6/6 RPC + 함수 실행 권한 정리 (원격 적용 완료 2026-11-15)
+│   └── 20261115113717_patient_code_login.sql  7 환자 코드 로그인 (3단계) — 원격 적용 완료 2026-11-15
 └── tests/
-    ├── rls.test.ts             # 권한 테스트 62개 (npm run test:db)
+    ├── rls.test.ts             # 권한 테스트 63개 (npm run test:db)
+    ├── patient-login.test.ts   # 3단계 환자 코드 로그인 흐름 15개 (서버 로직 + migration 7)
     ├── verify-scripts.test.ts  # 원격 검증 SQL을 PGlite로 미리 실행 (7개)
     └── support/                # PGlite 테스트 도구, Supabase 환경 재현 shim (테스트 전용)
 verify/                         # 원격 검증 SQL (migration 아님 — db push 대상 아님)
@@ -182,6 +184,50 @@ insert into public.staff_assignments (patient_id, staff_id) values ('<환자 UUI
 | 동시성 | PGlite는 연결 1개 | `for update` 잠금 대기를 실제로 겪어 보지 못함 (순차 stale 시나리오만 검증) | 3단계에서 두 브라우저 세션으로 동시 처리 E2E 추가 예정 |
 | 기본 권한 | Supabase는 public의 새 객체에 anon/authenticated 권한 자동 부여 | 다음 migration에서 REVOKE를 빠뜨리면 노출 | shim이 같은 기본 권한을 재현하고, 테스트와 `verify-catalog`가 anon 권한 0을 검사 |
 | GraphQL | Supabase는 `pg_graphql`로 public 테이블 노출 | 권한이 새면 GraphQL로도 조회됨 | GraphQL도 같은 GRANT·RLS를 따르므로 anon 권한 0 → 노출 없음. advisors로 재확인 |
+
+## 3단계: 환자 코드 로그인 (migration 7)
+
+흐름은 **환자 코드 + 생년월일로 최초 확인 → 10분짜리 일회용 설정 권한 → 새 비밀번호 설정 → 환자 코드 + 비밀번호로 로그인** 입니다.
+
+| 구성 | 내용 |
+| --- | --- |
+| 저장 위치 | `private.patient_credentials`(코드 해시·가상 생년월일·잠금), `private.password_setup_tokens`(설정 권한 해시). API에 노출되지 않음 |
+| 서버 전용 함수 | `svc_*` 7개 — service_role만 실행. 실패는 이유 구분 없이 `{"ok": false}` |
+| 반복 시도 제한 | DB: 코드별 생년월일 5회 오류·비밀번호 5회 오류 → 15분 잠금. 서버: IP별 요청 횟수 제한(메모리) |
+| 방어선 | 비밀번호 설정 전 환자는 세션이 있어도 본인 기록 권한 없음 (`is_patient_self` 조건 추가) |
+| 권한 축소 | `create_my_patient_profile`의 로그인 사용자 실행 권한 회수 — 환자는 서버가 발급 (Security Advisor 경고 10 → 9) |
+| 비밀번호·세션 | Supabase Auth (DB에 비밀번호 저장 안 함). 로그인 이메일은 내부용 무작위 주소이며 서버에서만 조회 |
+
+### 실제 연동 검증 (carelog-dev)
+
+```bash
+npm run test:e2e:remote   # 포트 3335, 검증용 가상 환자 A·B를 만들어 브라우저로 확인 후 자동 삭제
+```
+
+- 브라우저 흐름: 코드+생년월일 → 비밀번호 설정 → 저장(같은 날 1건) → 새로고침 → 로그아웃 → 재로그인
+- 환자 본인 세션으로 실제 RLS 확인: 설정 전 접근 차단, 설정 후 생년월일로 재설정 차단, A·B 기록 상호 차단, 서버 전용 함수 호출 차단
+- 가상 생년월일·코드·비밀번호는 실행 중 메모리에만 있고, trace·스크린샷은 꺼져 있음
+
+### 원격 적용 (별도 승인 후)
+
+`status → preflight → dry-run`으로 7번만 적용 예정인지 확인한 뒤 4단계와 같은 방법으로 적용합니다.
+
+- 사전 점검 SQL은 "CareLog 객체 없음"을 검사하므로 **이미 6개가 적용된 지금은 일부 항목이 false가 정상**입니다. 이번에는 `status`와 `dry-run`으로 판단합니다.
+- 적용 후 `verify-catalog`를 실행하고, 스모크 테스트 `verify/20_post_apply_rls_smoke.sql`(migration 7 반영본)을 실행합니다.
+
+### 가상 환자 발급 (적용 후, 관리자)
+
+1. `.env.local`에 서버 키를 추가하고 `chmod 600 .env.local` (편집기로 입력, 출력 금지)
+   - `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`
+2. 발급 스크립트를 실행합니다.
+   - 생년월일은 화면에 보이지 않게 입력받고, 출력하거나 저장하지 않습니다.
+   - URL이 `SUPABASE_PROJECT_REF`(carelog-dev)와 다르면 중단합니다.
+
+```bash
+node --env-file=.env.local scripts/provision-virtual-patient.mjs   # 환자 A, B 각각 1번씩
+```
+
+3. 표시되는 **환자 코드**를 메모합니다. 한 번만 표시되고, DB에는 해시만 저장됩니다.
 
 ## 새 migration을 추가할 때
 

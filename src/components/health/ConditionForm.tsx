@@ -4,7 +4,7 @@ import { Angry, CheckCircle2, Frown, Laugh, Meh, Save, Smile } from "lucide-reac
 import { useState } from "react";
 import { Button, ChoiceGroup, cn, ErrorText } from "@/components/ui/primitives";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { repository } from "@/hooks/useCareLog";
+import { useRepository } from "@/hooks/repository-context";
 import {
   CONDITION_FACE,
   DIGESTION_LABEL,
@@ -42,6 +42,8 @@ export function ConditionForm({ patientId, date, mode, existing, onSaved }: Prop
   const [memo, setMemo] = useState(existing?.memo ?? "");
   const [saved, setSaved] = useState(false);
   const saveAction = useAsyncAction();
+  // 데모: localStorage 저장소 / DB 모드: Supabase 저장소 (RepositoryContext로 주입)
+  const repository = useRepository();
 
   const missing = [
     !condition && "컨디션",

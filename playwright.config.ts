@@ -2,6 +2,8 @@ import { defineConfig, devices } from "@playwright/test";
 
 const PORT = Number(process.env.E2E_PORT ?? 3334);
 const BASE_URL = `http://127.0.0.1:${PORT}`;
+/** 존재하지 않는 가짜 프로젝트 주소 (E2E 전용) */
+export const E2E_FAKE_SUPABASE_URL = "https://e2efakeprojectrefxyz.supabase.co";
 
 /**
  * 사용자 흐름 테스트 — `npm run test:e2e` (scripts/run-e2e.sh)로 실행하세요.
@@ -29,6 +31,15 @@ export default defineConfig({
   ],
   webServer: {
     command: `npx next dev -p ${PORT} -H 127.0.0.1`,
+    // E2E는 실제 Supabase에 절대 접속하지 않도록 가짜 설정으로 덮어씀 (프로세스 환경변수가 .env.local보다 우선)
+    env: {
+      ...(Object.fromEntries(Object.entries(process.env).filter(([, v]) => v !== undefined)) as Record<string, string>),
+      NEXT_PUBLIC_SUPABASE_URL: E2E_FAKE_SUPABASE_URL,
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "e2e-fake-publishable-key-not-real-0000",
+      SUPABASE_SECRET_KEY: "e2e-fake-secret-key-not-real-000000000",
+      SUPABASE_ACCESS_TOKEN: "",
+      CARELOG_NEXT_DIST_DIR: ".next-e2e",
+    },
     url: BASE_URL,
     reuseExistingServer: false,
     timeout: 120_000,
