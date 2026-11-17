@@ -1,212 +1,131 @@
 "use client";
 
-import { ChartNoAxesColumn, House, LogOut, type LucideIcon } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { CalendarCheck, ChartNoAxesColumn, House, Pill, UsersRound } from "lucide-react";
+import { useState } from "react";
+import { MealsSection, RequestsSection } from "@/components/patient-db/CareSections";
+import { MedicationsView } from "@/components/patient-db/MedicationsView";
 import { PatientConditionForm } from "@/components/patient-db/PatientConditionForm";
 import { PatientRecordsView } from "@/components/patient-db/PatientRecordsView";
-import { Alert, cn, PButton, PCard, StatusPill, Wordmark } from "@/components/patient-ui/kit";
-import { CONDITION_WORD } from "@/components/patient-ui/labels";
+import { ShareView } from "@/components/patient-db/ShareView";
+import { VisitPrepView } from "@/components/patient-db/VisitPrepView";
+import { AppShell, type ShellTab } from "@/components/patient-ui/AppShell";
+import { Alert, cn, PButton, PCard, Segmented, SoftSheet, StatusPill, TextField } from "@/components/patient-ui/kit";
+import { CONDITION_WORD, SLEEP_WORD } from "@/components/patient-ui/labels";
 import { RepositoryProvider } from "@/hooks/repository-context";
-import { formatKoreanDate, formatLongKoreanDate, lastNDates, todayISO } from "@/lib/date";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { useDbApp } from "@/hooks/useDbApp";
+import { formatKoreanDate, formatKoreanTime, formatLongKoreanDate, lastNDates, todayISO } from "@/lib/date";
+import { currentAdmission } from "@/lib/domain/admissions";
 import { MODE_LABEL } from "@/lib/labels";
-import { createSupabasePatientRepository, type SupabasePatientRepository } from "@/lib/repository/supabase";
-import { getBrowserClient } from "@/lib/supabase/browser";
-import type { HealthRecord } from "@/types";
+import type { DbSnapshot, SupabaseRepository } from "@/lib/repository/supabase";
+import { admissionsOf, medicationsOf, questionsOf, recordsOf } from "@/lib/selectors";
+import type { Admission, CareMode, HealthRecord, Patient } from "@/types";
 
-const noopSubscribe = () => () => {};
-
-type Tab = "home" | "records";
-const TABS: { id: Tab; label: string; icon: LucideIcon }[] = [
+type Tab = "home" | "records" | "meds" | "visit" | "share";
+const TABS: ShellTab<Tab>[] = [
   { id: "home", label: "홈", icon: House },
   { id: "records", label: "기록 보기", icon: ChartNoAxesColumn },
+  { id: "meds", label: "내 약", icon: Pill },
+  { id: "visit", label: "진료 준비", icon: CalendarCheck },
+  { id: "share", label: "보호자 공유", icon: UsersRound },
 ];
 
-/** DB 모드: 로그인한 가상 환자 본인의 컨디션 기록 (Supabase, RLS 적용) */
+/** 로그인 버전 — 환자 (본인 기록만, RLS 적용) */
 export function MyRecordsApp() {
-  const router = useRouter();
-  const [repo, setRepo] = useState<SupabasePatientRepository | null>(null);
+  const { repo, snapshot, loadState, ready, logout } = useDbApp("patient");
   const [tab, setTab] = useState<Tab>("home");
-
-  useEffect(() => {
-    const client = getBrowserClient();
-    if (!client) {
-      router.replace("/login");
-      return;
-    }
-    let cancelled = false;
-    void client.auth.getUser().then(({ data }) => {
-      if (cancelled) return;
-      if (!data.user) return router.replace("/login");
-      const r = createSupabasePatientRepository(client, data.user.id);
-      setRepo(r);
-      void r.load();
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
-
-  const snapshot = useSyncExternalStore(repo?.subscribe ?? noopSubscribe, () => repo?.getSnapshot() ?? null, () => null);
-  const loadState = useSyncExternalStore(repo?.subscribe ?? noopSubscribe, () => repo?.getLoadState() ?? null, () => null);
-
-  async function logout() {
-    await fetch("/api/patient-auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => undefined);
-    await getBrowserClient()?.auth.signOut();
-    router.replace("/login");
-  }
-
-  const goTab = (t: Tab) => {
-    setTab(t);
-    window.scrollTo({ top: 0 });
-  };
-
   const patient = snapshot?.patients[0];
-  // 현재 날짜는 데이터가 준비된 뒤(브라우저)에서만 계산 — 사전 렌더링 중 new Date() 사용 금지 (cacheComponents)
-  const today = snapshot ? todayISO() : "";
-  const records = snapshot?.records ?? [];
-  const ready = loadState?.state === "ready" && patient && repo;
 
   return (
-    <div className="min-h-dvh bg-ivory text-ink lg:flex">
-      {/* PC: 왼쪽 메뉴 */}
-      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line bg-ivory px-5 py-7 lg:flex">
-        <Wordmark sub="케어로그" />
-        <nav aria-label="환자 메뉴" className="mt-10 space-y-1.5">
-          {TABS.map((t) => (
-            <NavItem key={t.id} label={t.label} icon={t.icon} active={tab === t.id} onClick={() => goTab(t.id)} layout="side" />
-          ))}
-        </nav>
-        <div className="mt-auto space-y-3">
-          <p className="rounded-2xl bg-ivory-deep px-4 py-3 text-xs leading-relaxed text-ink-soft">
-            DB 연동 시험 (carelog-dev) · 가상 환자 계정 전용입니다. 실제 환자정보를 입력하지 마세요.
-          </p>
-          <PButton variant="secondary" size="md" icon={LogOut} className="w-full" onClick={() => void logout()}>
-            로그아웃
-          </PButton>
-        </div>
-      </aside>
-
-      <div className="min-w-0 flex-1">
-        {/* 모바일: 상단 */}
-        <header className="sticky top-0 z-30 border-b border-line/70 bg-ivory/95 backdrop-blur lg:hidden">
-          <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-3">
-            <Wordmark />
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs whitespace-nowrap text-ink-soft max-[359px]:hidden">가상 데이터</span>
-              <PButton variant="ghost" size="sm" icon={LogOut} onClick={() => void logout()}>
-                로그아웃
-              </PButton>
-            </div>
-          </div>
-        </header>
-
-        <main className="mx-auto max-w-xl px-4 pt-5 pb-32 sm:px-6 lg:max-w-6xl lg:px-10 lg:pt-10 lg:pb-16">
-          {(!repo || loadState?.state === "loading" || loadState?.state === "idle") && (
-            <p className="py-24 text-center text-ink-soft">기록을 불러오는 중…</p>
-          )}
-          {loadState?.state === "error" && (
-            <PCard>
-              <Alert>{loadState.message}</Alert>
-              <PButton variant="secondary" size="md" className="mt-4" onClick={() => void repo?.load()}>
-                다시 불러오기
-              </PButton>
-            </PCard>
-          )}
-
-          {ready && (
-            <RepositoryProvider value={repo}>
-              {tab === "home" ? (
-                <HomeView
-                  name={patient.name}
-                  modeLabel={MODE_LABEL[patient.careMode]}
-                  today={today}
-                  records={records}
-                  onShowRecords={() => goTab("records")}
-                  form={(aside) => (
-                    <PatientConditionForm
-                      key={today}
-                      patientId={patient.id}
-                      date={today}
-                      mode={patient.careMode}
-                      existing={records.find((r) => r.date === today)}
-                      aside={aside}
-                    />
-                  )}
-                />
-              ) : (
-                <PatientRecordsView patient={patient} records={records} today={today} />
-              )}
-            </RepositoryProvider>
-          )}
-        </main>
-
-        {/* 모바일: 하단 탭 */}
-        <nav
-          aria-label="환자 메뉴"
-          className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
-        >
-          <div className="mx-auto grid max-w-xl grid-cols-2 gap-2 px-4 py-2">
-            {TABS.map((t) => (
-              <NavItem key={t.id} label={t.label} icon={t.icon} active={tab === t.id} onClick={() => goTab(t.id)} layout="bottom" />
-            ))}
-          </div>
-        </nav>
-      </div>
-    </div>
+    <AppShell
+      tabs={TABS}
+      active={tab}
+      onTab={setTab}
+      roleLabel="가상 환자"
+      userLabel={patient?.name}
+      onLogout={() => void logout()}
+      loadState={loadState}
+      onRetry={() => void repo?.load()}
+      ready={ready && Boolean(patient)}
+    >
+      {ready && patient && repo && snapshot && (
+        <RepositoryProvider value={repo}>
+          <PatientTabs tab={tab} setTab={setTab} snapshot={snapshot} patient={patient} repo={repo} />
+        </RepositoryProvider>
+      )}
+    </AppShell>
   );
 }
 
-function NavItem({
-  label,
-  icon: Icon,
-  active,
-  onClick,
-  layout,
+function PatientTabs({
+  tab,
+  setTab,
+  snapshot,
+  patient,
+  repo,
 }: {
-  label: string;
-  icon: LucideIcon;
-  active: boolean;
-  onClick: () => void;
-  layout: "side" | "bottom";
+  tab: Tab;
+  setTab: (t: Tab) => void;
+  snapshot: DbSnapshot;
+  patient: Patient;
+  repo: SupabaseRepository;
 }) {
-  return (
-    <button
-      type="button"
-      aria-current={active ? "page" : undefined}
-      onClick={onClick}
-      className={cn(
-        "flex items-center rounded-2xl transition",
-        layout === "side" ? "min-h-12 w-full gap-3 px-4 text-base" : "min-h-14 flex-col justify-center gap-1 text-xs",
-        active ? "bg-sage-100 font-bold text-sage-800" : "font-medium text-ink-soft hover:bg-ivory-deep hover:text-ink",
-      )}
-    >
-      <Icon className="h-6 w-6" strokeWidth={active ? 2.2 : 1.8} aria-hidden />
-      {label}
-    </button>
-  );
+  // 현재 날짜는 데이터가 준비된 뒤(브라우저)에서만 계산 — 사전 렌더링 중 new Date() 사용 금지 (cacheComponents)
+  const today = todayISO();
+  const records = recordsOf(snapshot, patient.id);
+  const admissions = admissionsOf(snapshot, patient.id);
+  switch (tab) {
+    case "records":
+      return <PatientRecordsView patient={patient} records={records} today={today} admissions={admissions} />;
+    case "meds":
+      return <MedicationsView medications={medicationsOf(snapshot, patient.id)} patientId={patient.id} repo={repo} editable />;
+    case "visit":
+      return <VisitPrepView patient={patient} records={records} questions={questionsOf(snapshot, patient.id)} today={today} repo={repo} />;
+    case "share":
+      return <ShareView snapshot={snapshot} patientId={patient.id} repo={repo} />;
+    default:
+      return (
+        <HomeView
+          snapshot={snapshot}
+          patient={patient}
+          today={today}
+          records={records}
+          admission={currentAdmission(snapshot, patient.id)}
+          repo={repo}
+          onShowRecords={() => {
+            setTab("records");
+            window.scrollTo({ top: 0 });
+          }}
+        />
+      );
+  }
 }
 
 function HomeView({
-  name,
-  modeLabel,
+  snapshot,
+  patient,
   today,
   records,
+  admission,
+  repo,
   onShowRecords,
-  form,
 }: {
-  name: string;
-  modeLabel: string;
+  snapshot: DbSnapshot;
+  patient: Patient;
   today: string;
   records: HealthRecord[];
+  admission?: Admission;
+  repo: SupabaseRepository;
   onShowRecords: () => void;
-  form: (aside: React.ReactNode) => React.ReactNode;
 }) {
+  const [modeTarget, setModeTarget] = useState<CareMode | null>(null);
+  const [editingToday, setEditingToday] = useState(false);
   const latest = [...records].filter((r) => r.date < today).sort((a, b) => b.date.localeCompare(a.date))[0];
   const week = lastNDates(7, today);
   const weekRecs = records.filter((r) => week.includes(r.date));
   const weekAvg = weekRecs.length ? weekRecs.reduce((s, r) => s + r.condition, 0) / weekRecs.length : null;
-  const hasToday = records.some((r) => r.date === today);
+  const todayRecord = records.find((r) => r.date === today);
+  const inpatient = patient.careMode === "inpatient";
 
   const recentCard = latest && (
     <PCard tone="tint" className="!py-4">
@@ -222,23 +141,100 @@ function HomeView({
     </PCard>
   );
 
+  const form = (
+    <PatientConditionForm
+      key={`${today}-${patient.careMode}`}
+      patientId={patient.id}
+      date={today}
+      mode={patient.careMode}
+      existing={todayRecord}
+      aside={<div className="lg:hidden">{recentCard}</div>}
+    />
+  );
+
   return (
     <div className="space-y-6">
       <section>
         <div className="flex items-center justify-between gap-3">
           <p className="text-ink-soft">{formatLongKoreanDate(today)}</p>
-          <StatusPill tone="outline">{modeLabel} 중</StatusPill>
+          <StatusPill tone="outline">{MODE_LABEL[patient.careMode]} 중</StatusPill>
         </div>
         <h1 className="mt-3 text-[1.75rem] leading-tight font-extrabold tracking-tight break-keep text-ink sm:text-3xl">
-          {name} 님, 안녕하세요.
+          {patient.name} 님, 안녕하세요.
         </h1>
         <p className="mt-1.5 text-ink-soft">
-          {hasToday ? "오늘 기록이 있어요. 다시 저장하면 수정됩니다." : "오늘의 작은 변화도 소중한 기록이에요."}
+          {todayRecord ? "오늘 기록이 있어요. 다시 저장하면 수정됩니다." : "오늘의 작은 변화도 소중한 기록이에요."}
         </p>
+        <div className="mt-4 max-w-sm">
+          <Segmented
+            ariaLabel="이용 모드"
+            items={[
+              { value: "outpatient" as CareMode, label: "통원" },
+              { value: "inpatient" as CareMode, label: "입원" },
+            ]}
+            value={patient.careMode}
+            onChange={(m) => m !== patient.careMode && setModeTarget(m)}
+          />
+          {inpatient && admission && (
+            <p className="mt-2 text-sm text-ink-soft">
+              {formatKoreanDate(admission.admittedOn, false)} 입원 · {admission.ward === "미입력" ? "병동 미입력" : admission.ward}
+              {admission.room !== "미입력" && ` ${admission.room}호`} · 자기기록
+            </p>
+          )}
+        </div>
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-        <div>{form(<div className="lg:hidden">{recentCard}</div>)}</div>
+        <div className="space-y-6">
+          {inpatient && todayRecord ? (
+            <>
+              <PCard tone="tint" aria-label="오늘의 컨디션">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-lg font-bold text-ink">오늘의 컨디션</p>
+                    <p className="mt-2 text-[1.6rem] font-extrabold text-sage-700">
+                      {CONDITION_WORD[todayRecord.condition]} · 통증 {todayRecord.pain}점
+                    </p>
+                    <p className="mt-1 text-sm text-sage-800">
+                      ✓ 기록 완료 · {formatKoreanTime(todayRecord.updatedAt)} · 수면 {SLEEP_WORD[todayRecord.sleep]}
+                    </p>
+                  </div>
+                  <PButton variant="secondary" size="sm" onClick={() => setEditingToday(true)}>
+                    기록 수정
+                  </PButton>
+                </div>
+              </PCard>
+              <button
+                type="button"
+                onClick={onShowRecords}
+                className="w-full rounded-[1.75rem] border border-line bg-white p-5 text-left hover:bg-sage-50"
+              >
+                <p className="font-bold text-ink">통원 때의 기록도 그대로 이어져요.</p>
+                <p className="mt-1 text-sm text-ink-soft">기록 보기에서 모든 모드를 함께 확인해요. →</p>
+              </button>
+              <SoftSheet open={editingToday} title="오늘 기록 수정" onClose={() => setEditingToday(false)}>
+                {editingToday && (
+                  <PatientConditionForm
+                    key={todayRecord.updatedAt}
+                    patientId={patient.id}
+                    date={today}
+                    mode={patient.careMode}
+                    existing={todayRecord}
+                    onSaved={() => setEditingToday(false)}
+                  />
+                )}
+              </SoftSheet>
+            </>
+          ) : (
+            form
+          )}
+          {inpatient && (
+            <>
+              <MealsSection snapshot={snapshot} patientId={patient.id} repo={repo} />
+              <RequestsSection snapshot={snapshot} patientId={patient.id} repo={repo} />
+            </>
+          )}
+        </div>
 
         {/* PC: 오른쪽 요약 */}
         <aside className="hidden space-y-4 lg:sticky lg:top-10 lg:block" aria-label="최근 요약">
@@ -270,6 +266,60 @@ function HomeView({
           </PButton>
         </aside>
       </div>
+
+      <CareModeSheet target={modeTarget} patient={patient} repo={repo} onClose={() => setModeTarget(null)} />
     </div>
+  );
+}
+
+/** 통원↔입원 전환 (환자 자기기록 — 병원의 공식 입원 확인이 아님) */
+function CareModeSheet({
+  target,
+  patient,
+  repo,
+  onClose,
+}: {
+  target: CareMode | null;
+  patient: Patient;
+  repo: SupabaseRepository;
+  onClose: () => void;
+}) {
+  const [ward, setWard] = useState("");
+  const [room, setRoom] = useState("");
+  const action = useAsyncAction();
+  const toInpatient = target === "inpatient";
+  return (
+    <SoftSheet open={target !== null} title={toInpatient ? "입원 모드로 바꾸기" : "통원 모드로 바꾸기"} onClose={onClose}>
+      <PCard className="space-y-4">
+        <p className="text-ink">
+          {toInpatient
+            ? "오늘 날짜로 새 입원 이력이 생기고, 오늘의 식사와 생활 요청을 쓸 수 있어요."
+            : "진행 중인 입원에 오늘 날짜로 퇴원을 기록해요. 지금까지의 기록과 입원 이력은 그대로 남아요."}
+        </p>
+        <p className="text-sm text-ink-soft">환자가 직접 남기는 자기기록이며 병원의 공식 입원 확인이 아니에요.</p>
+        {toInpatient && (
+          <div className="grid grid-cols-2 gap-3">
+            <TextField label="병동 (선택)" value={ward} maxLength={50} onChange={(e) => setWard(e.target.value)} placeholder="예: 가상 병동" />
+            <TextField label="병실 (선택)" value={room} maxLength={20} onChange={(e) => setRoom(e.target.value)} placeholder="예: 302" />
+          </div>
+        )}
+        <Alert>{action.error}</Alert>
+        <PButton
+          className="w-full"
+          disabled={action.pending}
+          onClick={async () => {
+            if (!target) return;
+            const r = await action.run(() => repo.setCareMode(patient.id, target, { ward, room }));
+            if (r.ok) {
+              setWard("");
+              setRoom("");
+              onClose();
+            }
+          }}
+        >
+          {action.pending ? "바꾸는 중…" : toInpatient ? "입원으로 바꾸기" : "통원으로 바꾸기"}
+        </PButton>
+      </PCard>
+    </SoftSheet>
   );
 }

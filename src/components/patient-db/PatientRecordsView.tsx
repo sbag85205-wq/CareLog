@@ -8,7 +8,7 @@ import { CardHeading, cn, PButton, PCard, Segmented, SoftSheet, StatusPill } fro
 import { CONDITION_WORD, SLEEP_WORD } from "@/components/patient-ui/labels";
 import { addDays, formatDotDate, formatKoreanTime, formatLongKoreanDate, lastNDates, parseISODate } from "@/lib/date";
 import { DIGESTION_LABEL, MEAL_INTAKE_LABEL, MODE_LABEL } from "@/lib/labels";
-import type { HealthRecord, Patient } from "@/types";
+import type { Admission, HealthRecord, Patient } from "@/types";
 
 /** 저장소가 불러오는 기간과 같음 (lib/repository/supabase.ts HISTORY_DAYS) */
 const WINDOW_DAYS = 90;
@@ -25,10 +25,24 @@ interface Props {
   records: HealthRecord[];
   /** 오늘 (한국 날짜) — 데이터가 준비된 뒤 브라우저에서 계산해 전달 */
   today: string;
+  /** 입원 이력 (자기기록, 최신순으로 표시) */
+  admissions?: Admission[];
+  /** 읽기 전용 (의료진·보호자 화면에서 재사용) */
+  readOnly?: boolean;
+  title?: string;
+  sub?: string;
 }
 
 /** 기록 보기: 컨디션 흐름(7일/30일) + 월 달력 + 날짜별 기록·수정 */
-export function PatientRecordsView({ patient, records, today }: Props) {
+export function PatientRecordsView({
+  patient,
+  records,
+  today,
+  admissions = [],
+  readOnly = false,
+  title = "나의 기록",
+  sub = "하루하루 쌓인 나의 변화를 살펴보세요.",
+}: Props) {
   const [range, setRange] = useState<Range>(7);
   const [selected, setSelected] = useState(today);
   const [editing, setEditing] = useState(false);
@@ -37,8 +51,8 @@ export function PatientRecordsView({ patient, records, today }: Props) {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-[1.75rem] font-extrabold tracking-tight text-ink sm:text-3xl">나의 기록</h1>
-        <p className="mt-1 text-ink-soft">하루하루 쌓인 나의 변화를 살펴보세요.</p>
+        <h1 className="text-[1.75rem] font-extrabold tracking-tight text-ink sm:text-3xl">{title}</h1>
+        <p className="mt-1 text-ink-soft">{sub}</p>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
@@ -54,11 +68,12 @@ export function PatientRecordsView({ patient, records, today }: Props) {
           />
           <ConditionTrend byDate={byDate} today={today} range={range} />
           <BodySignals byDate={byDate} today={today} range={range} />
+          {admissions.length > 0 && <AdmissionHistory admissions={admissions} />}
         </div>
 
         <div className="space-y-5">
           <MonthCalendar byDate={byDate} today={today} selected={selected} onSelect={setSelected} />
-          <DayDetail date={selected} record={byDate.get(selected)} onEdit={() => setEditing(true)} />
+          <DayDetail date={selected} record={byDate.get(selected)} onEdit={readOnly ? undefined : () => setEditing(true)} />
         </div>
       </div>
 
@@ -88,7 +103,7 @@ function average(values: number[]) {
   return values.length ? values.reduce((a, b) => a + b, 0) / values.length : null;
 }
 
-function ConditionTrend({ byDate, today, range }: { byDate: Map<string, HealthRecord>; today: string; range: Range }) {
+export function ConditionTrend({ byDate, today, range }: { byDate: Map<string, HealthRecord>; today: string; range: Range }) {
   const dates = lastNDates(range, today);
   const prevDates = lastNDates(range, addDays(today, -range));
   const data = dates.map((date) => ({ date, condition: byDate.get(date)?.condition ?? null }));
@@ -321,7 +336,7 @@ function IconNav({ label, disabled, onClick, children }: { label: string; disabl
 
 /* ───────────── 날짜별 기록 ───────────── */
 
-function DayDetail({ date, record: r, onEdit }: { date: string; record?: HealthRecord; onEdit: () => void }) {
+function DayDetail({ date, record: r, onEdit }: { date: string; record?: HealthRecord; onEdit?: () => void }) {
   return (
     <PCard aria-labelledby="day-title">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -365,9 +380,35 @@ function DayDetail({ date, record: r, onEdit }: { date: string; record?: HealthR
         <p className="py-2 text-ink-soft">이 날은 아직 기록이 없어요.</p>
       )}
 
-      <PButton variant="secondary" className="mt-5 w-full" icon={r ? PencilLine : Plus} onClick={onEdit}>
-        {r ? "이 날짜의 기록 수정" : "이 날짜 기록하기"}
-      </PButton>
+      {onEdit && (
+        <PButton variant="secondary" className="mt-5 w-full" icon={r ? PencilLine : Plus} onClick={onEdit}>
+          {r ? "이 날짜의 기록 수정" : "이 날짜 기록하기"}
+        </PButton>
+      )}
+    </PCard>
+  );
+}
+
+/* ───────────── 입원 이력 ───────────── */
+
+/** 통원↔입원 전환 이력 (환자 자기기록 — 병원의 공식 입원 확인이 아님) */
+function AdmissionHistory({ admissions }: { admissions: Admission[] }) {
+  const list = [...admissions].sort((a, b) => b.admittedOn.localeCompare(a.admittedOn));
+  return (
+    <PCard aria-labelledby="adm-title">
+      <CardHeading id="adm-title" title="입원 이력" sub="기록 상세의 '통원 기록·입원 기록'은 기록할 때의 모드예요." />
+      <ul className="space-y-2">
+        {list.map((a) => (
+          <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-ivory px-4 py-3 text-sm">
+            <span className="font-bold text-ink">
+              {formatLongKoreanDate(a.admittedOn, false).replace(/ \S+요일$/, "")} ~ {a.dischargedOn ? formatLongKoreanDate(a.dischargedOn, false).replace(/ \S+요일$/, "") : "입원 중"}
+            </span>
+            <span className="text-ink-soft">
+              {a.ward === "미입력" ? "병동 미입력" : a.ward} · {a.room === "미입력" ? "병실 미입력" : `${a.room}호`} · {a.source === "self_reported" ? "자기기록" : "병원 확인"}
+            </span>
+          </li>
+        ))}
+      </ul>
     </PCard>
   );
 }

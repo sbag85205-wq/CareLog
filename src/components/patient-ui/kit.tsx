@@ -97,7 +97,7 @@ export function PButton({
         "inline-flex items-center justify-center gap-2 font-bold transition disabled:cursor-not-allowed",
         size === "lg" && "min-h-14 rounded-[1.25rem] px-6 text-[1.05rem]",
         size === "md" && "min-h-12 rounded-2xl px-5 text-base",
-        size === "sm" && "min-h-10 rounded-xl px-3.5 text-sm",
+        size === "sm" && "min-h-10 shrink-0 rounded-xl px-3.5 text-sm whitespace-nowrap",
         variant === "primary" && "bg-sage-700 text-white hover:bg-sage-800 disabled:bg-sage-300",
         variant === "secondary" &&
           "border border-line bg-white text-sage-800 hover:bg-sage-50 disabled:text-ink-soft disabled:opacity-60",
@@ -493,4 +493,77 @@ export function LeafIllustration({ className }: { className?: string }) {
       <ellipse cx="86" cy="15" rx="3.4" ry="4" fill="#f8f6f0" />
     </svg>
   );
+}
+
+/** 켜기/끄기 스위치 (예: 보호자에게 공개, 의료진과 공유) */
+export function Switch({
+  checked,
+  onChange,
+  label,
+  description,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  description?: string;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className="flex min-h-11 w-full items-center justify-between gap-3 rounded-2xl text-left disabled:opacity-60"
+    >
+      <span className="min-w-0">
+        <span className="block text-sm font-bold text-ink">{label}</span>
+        {description && <span className="block text-xs text-ink-soft">{description}</span>}
+      </span>
+      <span className={cn("relative h-7 w-12 shrink-0 rounded-full transition", checked ? "bg-sage-700" : "bg-ivory-deep ring-1 ring-line")} aria-hidden>
+        <span className={cn("absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-all", checked ? "left-6" : "left-1")} />
+      </span>
+    </button>
+  );
+}
+
+/** 생활 요청 진행 단계 (접수 → 직원 확인 → 처리 완료) */
+export function StatusSteps({ steps, current }: { steps: { key: string; label: string }[]; current: string }) {
+  const idx = steps.findIndex((s) => s.key === current);
+  return (
+    <ol className="flex items-center gap-1.5" aria-label={`진행 상태: ${steps[idx]?.label ?? ""}`}>
+      {steps.map((s, i) => {
+        const done = i <= idx;
+        return (
+          <li key={s.key} className="flex min-w-0 flex-1 items-center gap-1.5">
+            <span
+              className={cn(
+                "inline-flex min-h-7 min-w-0 flex-1 items-center justify-center gap-0.5 rounded-full px-2 text-xs font-bold whitespace-nowrap",
+                i === idx ? "bg-sage-700 text-white" : done ? "bg-sage-100 text-sage-800" : "bg-ivory-deep text-ink-soft",
+              )}
+              aria-current={i === idx ? "step" : undefined}
+            >
+              {done && i !== idx && <Check className="h-3 w-3 shrink-0" aria-hidden />}
+              <span className="truncate">{s.label}</span>
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** 오류·완료 안내를 잠시 보여 주는 작은 상태 줄 */
+export function InlineStatus({ error, done }: { error?: string | null; done?: string | null }) {
+  if (error) return <Alert className="mt-3">{error}</Alert>;
+  if (done)
+    return (
+      <p className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-sage-700" aria-live="polite">
+        <Check className="h-4 w-4" aria-hidden /> {done}
+      </p>
+    );
+  return null;
 }

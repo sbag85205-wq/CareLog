@@ -18,7 +18,8 @@ supabase/
 │   │                                           meal_menus, meal_logs, life_requests, staff_reviews, staff_review_notes
 │   ├── 20261111040240_rls_policies.sql    5/6 GRANT(컬럼 단위 포함) + RLS 정책
 │   ├── 20261111040241_rpc_functions.sql   6/6 RPC + 함수 실행 권한 정리 (원격 적용 완료 2026-11-15)
-│   └── 20261115113717_patient_code_login.sql  7 환자 코드 로그인 (3단계) — 원격 적용 완료 2026-11-15
+│   ├── 20261115113717_patient_code_login.sql  7 환자 코드 로그인 (3단계) — 원격 적용 완료 2026-11-15
+│   └── 20261118090000_patient_self_care.sql   8 환자 본인 내 약·다음 진료일 정책 (4단계) — 원격 적용 완료 2026-11-18
 └── tests/
     ├── rls.test.ts             # 권한 테스트 63개 (npm run test:db)
     ├── patient-login.test.ts   # 3단계 환자 코드 로그인 흐름 15개 (서버 로직 + migration 7)
@@ -147,7 +148,7 @@ npx --no-install supabase db push --remote
 | 순서 | 방법 | 확인 내용 |
 | --- | --- | --- |
 | 1 | `bash scripts/supabase-remote.sh status` | 원격 이력에 6개 모두 적용 |
-| 2 | `bash scripts/supabase-remote.sh verify-catalog` | 15개 테이블 RLS, 정책 28개, anon 권한 0, 역할·요청 상태·초대 토큰 컬럼 권한, definer `search_path`, 함수 실행 권한, 가입 트리거 |
+| 2 | `bash scripts/supabase-remote.sh verify-catalog` | 15개 테이블 RLS, 정책 32개(migration 5의 28개 + 8의 4개), anon 권한 0, 역할·요청 상태·초대 토큰 컬럼 권한, definer `search_path`, 함수 실행 권한, 가입 트리거 |
 | 3 | 대시보드 **SQL Editor**에 `verify/20_post_apply_rls_smoke.sql` 전체 붙여넣기 → 실행 | 가상 계정 5개로 가입 트리거·권한 상승 차단·RLS·RPC(상태 전이·stale)·보호자 범위·검토 메모 비공개·anon 차단 → 마지막 행 `PASS` |
 | 4 | `bash scripts/supabase-remote.sh advisors` | Supabase 보안 점검 경고 |
 | 5 | `bash scripts/supabase-remote.sh auth-config` | 이메일 확인 필수(`mailer_autoconfirm = false`) 여부 |
@@ -236,3 +237,14 @@ node --env-file=.env.local scripts/provision-virtual-patient.mjs   # 환자 A, B
 - 새 함수: 마지막에 `revoke execute … from public, anon, authenticated` 후 필요한 것만 GRANT,
   security definer면 `set search_path = ''`
 - `npm run test:db`에 정상·비정상 접근 테스트를 함께 추가합니다.
+
+## 4단계: 역할별 로그인 버전 (migration 8)
+
+- `20261118090000_patient_self_care.sql`: 정책만 4개 추가 (테이블·데이터 변경 없음)
+  - 환자 본인이 내 약을 추가·수정·삭제 (보호자 공개 여부는 기존 트리거가 계속 "환자 본인만" 허용, 기본 비공개)
+  - 환자 본인이 다음 진료일 기록 (`patients`의 UPDATE 컬럼 권한은 `next_visit_date` 하나뿐)
+- 테스트: `supabase/tests/patient-self-care.test.ts` (PGlite)
+- 원격 적용 순서: `status` → `dry-run`(이 파일 1개만 표시되는지) → 적용 → `status`(8/8) → `verify-catalog`(정책 32개)
+- 간호사·의료진·보호자 계정과 담당 배정은 `scripts/provision-member.mjs`로 관리자가 준비합니다 (역할은 서버 키로만 부여).
+- 역할별 화면·권한 검증: `E2E_REMOTE_SERVER=prod npm run test:e2e:remote -- roles`
+  (미배정 간호사·초대 없는 보호자·철회된 보호자 차단을 각자의 세션으로 확인, 검증 계정은 자동 삭제)

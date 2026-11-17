@@ -45,7 +45,7 @@ export function PatientLoginApp() {
     const client = getBrowserClient();
     if (!client) return;
     void client.auth.getUser().then(({ data }) => {
-      if (data.user) router.replace("/my");
+      if (data.user) router.replace("/"); // 서버가 확인한 역할의 화면으로
     });
   }, [router]);
 
@@ -306,6 +306,12 @@ export function PatientLoginApp() {
 
             <div className="mt-8 space-y-2 text-center text-sm text-ink-soft">
               <p>DB 연동 시험 화면 · 가상 환자 계정만 사용하세요. 실명·실제 생년월일은 입력하지 마세요.</p>
+              <p>
+                보호자·간호사이신가요?{" "}
+                <Link href="/login/member" className="font-semibold text-sage-700 underline underline-offset-4">
+                  보호자·의료진 로그인
+                </Link>
+              </p>
               <p>
                 로그인 없이 둘러보기:{" "}
                 <Link href="/demo" className="font-semibold text-sage-700 underline underline-offset-4">

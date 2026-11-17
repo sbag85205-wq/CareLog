@@ -6,20 +6,11 @@ import { Button, Card, cn, DemoBadge, EmptyState, ErrorText, SectionTitle, StatT
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { repository } from "@/hooks/useCareLog";
 import { toUserMessage } from "@/lib/errors";
-import { addDays, diffDays, formatKoreanDate, todayISO } from "@/lib/date";
+import { diffDays, formatKoreanDate, todayISO } from "@/lib/date";
 import type { HealthRecord, Patient, VisitQuestion } from "@/types";
 
-export function summarizeRecent(records: HealthRecord[], days: number) {
-  const from = addDays(todayISO(), -(days - 1));
-  const recent = records.filter((r) => r.date >= from);
-  const avg = (k: "condition" | "pain" | "sleep") =>
-    recent.length ? (recent.reduce((s, r) => s + r[k], 0) / recent.length).toFixed(1) : "-";
-  const symptomCount = new Map<string, number>();
-  recent.forEach((r) => r.symptoms.forEach((s) => symptomCount.set(s, (symptomCount.get(s) ?? 0) + 1)));
-  const topSymptoms = [...symptomCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
-  const worst = recent.reduce<HealthRecord | null>((w, r) => (!w || r.condition < w.condition ? r : w), null);
-  return { count: recent.length, avgCondition: avg("condition"), avgPain: avg("pain"), avgSleep: avg("sleep"), topSymptoms, worst };
-}
+export { summarizeRecent } from "@/lib/visit-summary";
+import { summarizeRecent } from "@/lib/visit-summary";
 
 export function NextVisitBadge({ date, light = false }: { date?: string; light?: boolean }) {
   if (!date) return <span className={light ? "" : "text-slate-500"}>예약 없음</span>;

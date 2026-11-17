@@ -96,7 +96,7 @@ export interface HealthRecord {
 }
 
 /** 약품 정보 출처 — 향후 식약처 공공데이터 API 연동 시 "mfds" 사용 */
-export type MedicationSource = "mock" | "mfds";
+export type MedicationSource = "mock" | "mfds" | "manual";
 
 export interface Medication {
   id: string;
@@ -111,7 +111,9 @@ export interface Medication {
   externalItemSeq?: string;
   /** 보호자에게 공개 여부 */
   visibleToGuardian: boolean;
-  isDemo: true;
+  /** DB 모드에서 마지막 수정 시각 (UTC ISO) */
+  updatedAt?: string;
+  isDemo: boolean;
 }
 
 export interface VisitQuestion {
@@ -119,6 +121,8 @@ export interface VisitQuestion {
   patientId: string;
   text: string;
   done: boolean;
+  /** 담당 의료진에게 공유 (DB 모드, 기본 false) */
+  sharedWithStaff?: boolean;
   createdAt: string;
 }
 

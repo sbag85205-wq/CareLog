@@ -207,7 +207,7 @@ test("4. B: 잘못된 생년월일은 같은 문구로 거부 → 올바르게 �
   await expectNoHorizontalOverflow(page); // 모바일 홈
 
   // 모바일 기록 보기: 오늘 기록이 달력·상세에 보임
-  await page.getByRole("navigation", { name: "환자 메뉴" }).getByRole("button", { name: "기록 보기" }).click();
+  await page.getByRole("navigation", { name: "메뉴" }).getByRole("button", { name: "기록 보기" }).click();
   await expect(page.getByRole("heading", { name: "나의 기록" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "컨디션 흐름" })).toBeVisible();
   await expect(page.getByText("기록 완료")).toBeVisible();
@@ -253,7 +253,7 @@ test("6. PC 화면: 로그인 → 기록 보기에서 오늘 기록 수정 (1건
   await expect(page.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^3점/ })).toHaveAttribute("aria-pressed", "true");
   await expectNoHorizontalOverflow(page);
 
-  await page.getByRole("navigation", { name: "환자 메뉴" }).getByRole("button", { name: "기록 보기" }).click();
+  await page.getByRole("navigation", { name: "메뉴" }).getByRole("button", { name: "기록 보기" }).click();
   await page.getByRole("button", { name: "이 날짜의 기록 수정" }).click();
   const sheet = page.getByRole("dialog");
   await sheet.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^5점/ }).click();

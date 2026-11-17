@@ -13,6 +13,7 @@ export const limiters = {
   verify: createRateLimiter(10, 10 * 60_000),
   setPassword: createRateLimiter(10, 10 * 60_000),
   login: createRateLimiter(20, 10 * 60_000),
+  memberLogin: createRateLimiter(20, 10 * 60_000),
 };
 
 export function json(body: unknown, status = 200) {

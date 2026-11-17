@@ -61,20 +61,27 @@ localStorage.removeItem("carelog.dev.latencyMs"); localStorage.removeItem("carel
 
 상단 **데모 데이터 초기화** 버튼으로 가상 데이터를 처음 상태로 되돌릴 수 있습니다.
 
-### 환자 로그인 (DB 연동 시험, carelog-dev)
+### 로그인 버전 (DB 연동 시험, carelog-dev) — 역할별 화면
 
-| 경로 | 내용 |
-| --- | --- |
-| `/` | 첫 화면 이동: 로그인 전 → `/login`, 로그인 후 → `/my` |
-| `/demo` | 기존 가상 데이터 데모 (localStorage, 로그인 없음) |
-| `/login` | **처음 이용하기**(환자 코드 + 생년월일 8자리 → 새 비밀번호) / **로그인**(환자 코드 + 비밀번호) |
-| `/my` | **홈**(오늘 컨디션 기록) · **기록 보기**(7일/30일 컨디션 흐름, 월 달력, 날짜별 기록 수정) — Supabase 저장, 같은 한국 날짜는 1건 수정 |
+| 경로 | 누가 | 내용 |
+| --- | --- | --- |
+| `/` | 모두 | 로그인 전 → `/login`, 로그인 후 → 서버가 확인한 역할의 화면 |
+| `/login` | 환자 | **처음 이용하기**(환자 코드 + 생년월일 8자리 → 새 비밀번호) / **로그인**(환자 코드 + 비밀번호) |
+| `/login/member` | 보호자·간호사/의료진 | 이메일 + 비밀번호 (관리자가 준비한 계정, 공개 가입 없음) |
+| `/my` | 환자 | 홈(통원·입원 전환, 오늘의 컨디션, 입원 시 오늘의 식사·생활 요청) · 기록 보기(7일/30일, 달력, 날짜별 수정, 입원 이력) · 내 약(추가·수정·삭제, 보호자 공개) · 진료 준비(다음 진료일, 2주 요약, 질문·의료진 공유) · 보호자 공유(초대·항목 변경·철회) |
+| `/staff` | 간호사·의료진 | 담당 환자 목록(30일 평균·기록 일수·시연용 분류) · 환자별 상세·공유된 질문 · 검토 상태 저장(내부 메모) · 담당 환자의 생활 요청 처리 |
+| `/guardian` | 보호자 | 최근 안부(기록 시각) → 공유받은 항목만 읽기 전용 |
+| `/invite#t=…` | 보호자 | 환자가 만든 초대 링크를 자기 계정으로 수락 (토큰은 주소의 `#` 뒤에만 있어 서버 로그에 남지 않음) |
+| `/demo` | 누구나 | 기존 가상 데이터 데모 — 역할을 바꿔 보는 체험 (localStorage, 로그인 없음) |
 
-- Supabase 설정이 없으면 `/login`은 "설정 없음" 안내만 표시합니다.
-- 환자 화면 디자인(아이보리·세이지)은 `src/components/patient-ui/`의 공통 컴포넌트(버튼·입력창·선택 버튼·상태 표시)를 사용합니다. 데모(`/`) 화면은 기존 `components/ui/primitives.tsx`를 그대로 씁니다.
-- 준비 절차는 [supabase/README.md](supabase/README.md)의 "3단계"를 따릅니다.
+- **권한은 화면이 아니라 DB(RLS)가 결정합니다.** 역할은 `profiles.role`(관리자만 변경)에서 읽고, 다른 역할 주소로 들어오면 자기 화면으로 이동합니다. 조회 결과 자체가 역할·담당 배정·공유 범위로 걸러집니다.
+- 가상 계정 준비 (관리자, 터미널에서 실행 — 비밀값은 화면에 보이지 않게 입력):
+  - 환자: `node --env-file=.env.local scripts/provision-virtual-patient.mjs` → 환자 코드 1회 표시
+  - 간호사·의료진 / 보호자 / 담당 배정: `node --env-file=.env.local scripts/provision-member.mjs` (메뉴 1·2·3·4)
+- 화면 디자인(아이보리·세이지)은 `src/components/patient-ui/`의 공통 컴포넌트를 사용합니다. 데모(`/demo`)는 기존 `components/ui/primitives.tsx`를 그대로 씁니다.
+- Supabase 설정이 없으면 `/login`은 "설정 없음" 안내만 표시합니다. 준비 절차는 [supabase/README.md](supabase/README.md)의 "3단계"·"4단계"를 따릅니다.
 - `npm run test:db` 는 PGlite에서 migration·RLS·로그인 흐름을 검증합니다.
-- `npm run test:e2e:remote` 는 carelog-dev에 검증용 가상 환자를 만들어 브라우저로 확인하고 삭제합니다. `E2E_REMOTE_SERVER=prod` 를 붙이면 배포와 같은 프로덕션 빌드로 실행합니다.
+- `npm run test:e2e:remote` 는 carelog-dev에 검증용 가상 계정(환자·간호사·보호자)을 만들어 브라우저로 확인하고 삭제합니다. `E2E_REMOTE_SERVER=prod` 를 붙이면 배포와 같은 프로덕션 빌드로 실행합니다.
 - 배포(Vercel) 환경변수: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`(Sensitive). 처음 이용하기 실패 원인은 런타임 로그의 `[patient-auth]` 줄로 구분합니다.
 
 ## 폴더 구조

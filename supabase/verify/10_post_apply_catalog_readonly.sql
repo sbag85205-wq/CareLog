@@ -22,8 +22,8 @@ from (
     ('carelog_tables_15', (select count(*) = 15 from tbl), (select count(*)::text from tbl)),
     ('rls_enabled_all', not exists (select 1 from tbl where not relrowsecurity),
       (select coalesce(string_agg(relname, ', '), '없음') from tbl where not relrowsecurity)),
-    -- migration 5/6의 정책 수와 정확히 일치해야 함 (정책 추가·삭제 시 이 값도 함께 수정)
-    ('policies_count_28', (select count(*) = 28 from pg_policies where schemaname = 'public'),
+    -- migration 5(28개) + migration 8(4개)의 정책 수와 정확히 일치해야 함 (정책 추가·삭제 시 이 값도 함께 수정)
+    ('policies_count_32', (select count(*) = 32 from pg_policies where schemaname = 'public'),
       (select count(*)::text from pg_policies where schemaname = 'public')),
     ('anon_no_table_privileges',
       not exists (select 1 from tbl where has_table_privilege('anon', oid, 'select,insert,update,delete')),
