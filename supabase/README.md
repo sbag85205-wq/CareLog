@@ -20,7 +20,7 @@ supabase/
 │   ├── 20261111040241_rpc_functions.sql   6/6 RPC + 함수 실행 권한 정리 (원격 적용 완료 2026-11-15)
 │   ├── 20261115113717_patient_code_login.sql  7 환자 코드 로그인 (3단계) — 원격 적용 완료 2026-11-15
 │   ├── 20261118090000_patient_self_care.sql   8 환자 본인 내 약·다음 진료일 정책 (4단계) — 원격 적용 완료 2026-11-18
-│   └── 20261120100000_admin_patient_accounts.sql  9 관리자 발급 아이디 로그인: 비활성화·관리자 목록 (원격 미적용 — 승인 후 적용)
+│   └── 20261120100000_admin_patient_accounts.sql  9 관리자 발급 아이디 로그인: 비활성화·관리자 목록 — 원격 적용 완료 2026-11-20
 └── tests/
     ├── rls.test.ts             # 권한 테스트 63개 (npm run test:db)
     ├── patient-login.test.ts   # 3단계 환자 코드 로그인 흐름 15개 (서버 로직 + migration 7)

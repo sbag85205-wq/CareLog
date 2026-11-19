@@ -113,10 +113,16 @@ test("1. 관리자: 웹에서 신규 환자 등록 (아이디·초기 비밀번�
   await expect(dlg.getByRole("switch", { name: "가상 테스트 계정" })).toHaveAttribute("aria-checked", "true");
   await dlg.getByRole("button", { name: "등록" }).click();
   await expect(page.getByText(`${N.name} 님을 등록했어요.`)).toBeVisible();
+  // 이후 단계가 실패해도 정리되도록 바로 등록
+  const { data } = await admin.from("patients").select("id, profile_id").eq("display_name", N.name).single();
+  N.pid = data!.id;
+  N.uid = data!.profile_id;
+  N.email = (await admin.auth.admin.getUserById(N.uid)).data.user!.email!;
+  track(N.uid, N.pid);
   const c = card(page, N.name);
   await expect(c.getByText(N.loginId)).toBeVisible();
-  await expect(c.getByText("활성")).toBeVisible();
-  await expect(c.getByText("테스트")).toBeVisible();
+  await expect(c.getByText("활성", { exact: true })).toBeVisible();
+  await expect(c.getByText("테스트", { exact: true })).toBeVisible();
   // 같은 아이디는 다시 쓸 수 없음
   await page.getByRole("button", { name: "환자 등록" }).click();
   await page.getByRole("dialog").getByLabel("표시 이름").fill("가상 검증 중복 (자동 삭제)");
@@ -128,10 +134,6 @@ test("1. 관리자: 웹에서 신규 환자 등록 (아이디·초기 비밀번�
   await expectNoHorizontalOverflow(page);
   await shot(page, "pc-admin-patients");
 
-  const { data } = await admin.from("patients").select("id, profile_id").eq("display_name", N.name).single();
-  N.pid = data!.id;
-  N.uid = data!.profile_id;
-  track(N.uid, N.pid);
   await page.context().close();
 });
 
@@ -213,7 +215,7 @@ test("4. 비활성화: 이미 로그인한 기기·세션도 즉시 차단, 새 
   const ap = await adminPage(browser);
   await card(ap, N.name).getByRole("button", { name: "비활성화" }).click();
   await ap.getByRole("dialog").getByRole("button", { name: "비활성화" }).click();
-  await expect(card(ap, N.name).getByText("비활성")).toBeVisible();
+  await expect(card(ap, N.name).getByText("비활성", { exact: true })).toBeVisible();
 
   expect((await live.from("health_records").select("id").eq("patient_id", N.pid)).data).toEqual([]);
   expect((await live.from("patients").select("id")).data).toEqual([]);
@@ -221,18 +223,24 @@ test("4. 비활성화: 이미 로그인한 기기·세션도 즉시 차단, 새 
     p_patient_id: N.pid, p_record_date: todayISO(), p_condition: 1, p_pain: 9, p_fatigue: 5, p_sleep: 1, p_meal_intake: 0, p_digestion: "nausea",
   });
   expect(write.error?.message ?? "").toMatch(/row-level security/);
+  // 로그인해 둔 기기: 새로고침하면 Auth가 세션을 거부해 로그인 화면으로, 또는(토큰이 남아 있으면) 비활성화 안내 — 어느 쪽이든 데이터 없음
   await page.reload({ waitUntil: "networkidle" });
-  await expect(page.getByText("비활성화된 계정입니다")).toBeVisible();
+  await expect(page.getByText("비활성화된 계정입니다").or(page.getByLabel("아이디"))).toBeVisible();
+  await expect(page.getByRole("group", { name: "오늘 컨디션" })).toHaveCount(0);
   await patientLoginFails(page, N.loginId, N.password);
 
   await card(ap, N.name).getByRole("button", { name: "복구" }).click();
   await ap.getByRole("dialog").getByRole("button", { name: "복구" }).click();
   await expect(card(ap, N.name).getByText("활성", { exact: true })).toBeVisible();
   await ap.context().close();
-
-  await patientLogin(page, N);
-  await expect(page.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^4점/ })).toHaveAttribute("aria-pressed", "true");
   await page.context().close();
+
+  // 복구 후: 같은 아이디·비밀번호로 다시 로그인, 기록 그대로
+  const fresh = await newPage(browser);
+  await patientLogin(fresh, N);
+  await expect(fresh.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^4점/ })).toHaveAttribute("aria-pressed", "true");
+  expect((await live.from("health_records").select("id").eq("patient_id", N.pid)).data).toHaveLength(1);
+  await fresh.context().close();
 });
 
 test("5. 일반 계정(환자·간호사·보호자)은 관리자 화면·API 사용 불가, 관리자도 환자 데이터 직접 조회 불가", async ({ browser }) => {
