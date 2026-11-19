@@ -1,271 +1,301 @@
 /**
- * carelog-dev 실제 연동 검증 (브라우저 + Supabase Auth + 실제 RLS)
+ * carelog-dev 실제 연동 검증 — 관리자 발급 아이디 로그인 (브라우저 + Supabase Auth + 실제 RLS)
  *
- * - 검증용 가상 환자 A·B를 발급하고 테스트가 끝나면 삭제
- * - 가상 생년월일·환자 코드·비밀번호는 메모리에만 두고 출력하지 않음
- *   (민감 입력은 evaluate로 넣어 Playwright 오류 로그에 값이 남지 않게 함)
- * - 건강기록 조회·저장 검증은 환자 본인 세션(Publishable key + 로그인)으로 실행 → 실제 RLS 적용
+ * 관리자 등록 → 환자 로그인 → 기록 저장 → 관리자 비밀번호 재설정 → 재로그인 후 같은 기록
+ * 이전 방식 환자 전환(같은 환자 ID·Auth ID, 기존 비밀번호) → 기록·약·질문·보호자 공유·간호사 배정 유지
+ * 비활성화(로그인한 세션도 즉시 차단) → 복구 / 일반 계정의 관리자 기능 차단 / 간호사·보호자 로그인
+ * 가상 테스트 계정만 영구 삭제 (연결 기록 수 표시·이름 확인)
+ * 모든 검증 계정은 테스트가 끝나면 삭제. 아이디·비밀번호는 evaluate로 입력해 로그에 남기지 않음
  */
-import { randomBytes, randomUUID } from "node:crypto";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 import { todayISO } from "../src/lib/date";
-import { generateLoginCode } from "../src/lib/patient-auth/rules";
-import { expectNoHorizontalOverflow } from "../e2e/helpers";
+import {
+  admin,
+  assignStaff,
+  cleanup,
+  expectNoHorizontalOverflow,
+  fillCondition,
+  memberLoginForm,
+  menu,
+  patientLogin,
+  provisionAdmin,
+  provisionLegacyPatient,
+  provisionMember,
+  provisionPatient,
+  randLoginId,
+  randPassword,
+  shot,
+  track,
+  typeSecret,
+  userSession,
+  type VMember,
+  type VPatient,
+} from "./support";
 
-const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const PUB = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
-const admin = createClient(URL, process.env.SUPABASE_SECRET_KEY!, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
-const DOMAIN = process.env.CARELOG_PATIENT_EMAIL_DOMAIN ?? "carelog.invalid";
-const VERIFY_FAILED = "입력하신 정보로 처음 이용하기를 진행할 수 없습니다";
-
-type V = { label: string; uid: string; pid: string; email: string; code: string; birth: string; wrongBirth: string; password: string };
-const created: { uid?: string; pid?: string }[] = [];
-
-function virtualBirth(): { birth: string; wrongBirth: string } {
-  const t = Date.UTC(1950, 0, 1) + Math.floor(Math.random() * 50 * 365) * 86_400_000;
-  const f = (ms: number) => new Date(ms).toISOString().slice(0, 10).replaceAll("-", "");
-  return { birth: f(t), wrongBirth: f(t + 86_400_000 * (3 + Math.floor(Math.random() * 200))) };
-}
-
-async function provision(label: string): Promise<V> {
-  const email = `patient-${randomUUID()}@${DOMAIN}`;
-  const rec: { uid?: string; pid?: string } = {};
-  created.push(rec);
-  const { data: u, error: ue } = await admin.auth.admin.createUser({
-    email,
-    password: randomBytes(32).toString("base64url"),
-    email_confirm: true,
-    user_metadata: { display_name: `가상 검증 ${label}` },
-  });
-  if (ue) throw new Error(`Auth 계정 생성 실패: ${ue.status ?? ""} ${ue.code ?? ue.message}`);
-  rec.uid = u.user.id;
-  const { data: p, error: pe } = await admin
-    .from("patients")
-    .insert({ profile_id: u.user.id, display_name: `가상 검증 ${label} (자동 삭제)` })
-    .select("id")
-    .single();
-  if (pe) throw new Error(`환자 생성 실패: ${pe.code} ${pe.message}`);
-  rec.pid = p.id;
-  const code = generateLoginCode();
-  const { birth, wrongBirth } = virtualBirth();
-  const { error: re } = await admin.rpc("svc_register_patient_credential", {
-    p_patient_id: p.id,
-    p_login_code: code,
-    p_birth_date: `${birth.slice(0, 4)}-${birth.slice(4, 6)}-${birth.slice(6, 8)}`,
-  });
-  if (re) throw new Error(`환자 코드 등록 실패: ${re.code} ${re.message}`);
-  return { label, uid: u.user.id, pid: p.id, email, code, birth, wrongBirth, password: `Cl${randomBytes(9).toString("base64url")}7` };
-}
-
-/** 환자 본인 세션 (실제 RLS 적용) */
-async function userSession(email: string, password: string): Promise<SupabaseClient> {
-  const c = createClient(URL, PUB, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { error } = await c.auth.signInWithPassword({ email, password });
-  if (error) throw new Error(`사용자 세션 로그인 실패: ${error.status ?? ""} ${error.code ?? ""}`);
-  return c;
-}
-
-/** 값이 로그에 남지 않게 입력 (React 제어 입력에 맞게 input 이벤트 발생) */
-async function typeSecret(locator: Locator, value: string) {
-  await locator.evaluate((el, v) => {
-    const input = el as HTMLInputElement;
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, v);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-  }, value);
-}
-
-async function firstUse(page: Page, v: V, birth: string) {
-  // 배포 주소(/)를 열면 로그인 전에는 /login 으로 이동
-  await page.goto("/", { waitUntil: "networkidle" });
-  await expect(page).toHaveURL(/\/login$/);
-  await page.getByRole("tab", { name: "처음 이용하기" }).click();
-  await typeSecret(page.getByLabel("환자 코드"), v.code);
-  await typeSecret(page.getByLabel("생년월일 8자리"), birth);
-  await page.getByRole("button", { name: "본인 확인하고 시작하기" }).click();
-}
-
-async function setPasswordAndEnter(page: Page, v: V) {
-  await expect(page.getByText("10분 안에 새 비밀번호를 설정해 주세요")).toBeVisible();
-  await typeSecret(page.getByLabel("새 비밀번호", { exact: true }), v.password);
-  await typeSecret(page.getByLabel("새 비밀번호 확인"), v.password);
-  await page.getByRole("button", { name: "설정하고 내 건강기록으로" }).click();
-  await expect(page).toHaveURL(/\/my$/);
-  await expect(page.getByRole("heading", { name: `가상 검증 ${v.label} (자동 삭제) 님, 안녕하세요.` })).toBeVisible();
-}
-
-async function fillCondition(page: Page, score: number) {
-  await page.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: new RegExp(`^${score}점`) }).click();
-  await page.getByRole("group", { name: "피로도" }).getByRole("button").nth(1).click();
-  await page.getByRole("group", { name: "수면 상태" }).getByRole("button").nth(3).click();
-  await page.getByRole("group", { name: "식사량" }).getByRole("button", { name: "대부분" }).click();
-  await page.getByRole("group", { name: "소화 상태" }).getByRole("button", { name: "좋음" }).click();
-}
-
-const todayRows = async (c: SupabaseClient, pid: string) => {
-  const { data, error } = await c.from("health_records").select("id, condition").eq("patient_id", pid).eq("record_date", todayISO());
-  if (error) throw new Error(`조회 실패: ${error.code}`);
-  return data;
-};
-
-let A: V;
-let B: V;
+let AD: VMember, S: VMember, G: VMember;
+let L: VPatient; // 이전 방식(아이디 없음) 환자
+let P2: VPatient; // 일반 환자 (관리자 기능 차단 확인용)
+const N: VPatient = { label: "신규", name: "가상 검증 신규 (자동 삭제)", uid: "", pid: "", email: "", loginId: randLoginId("n"), password: randPassword() };
+const LEGACY_MED = "(가상) 이전 방식 약";
+const LEGACY_Q = "(가상) 이전 방식 질문";
+const FAILED = "아이디 또는 비밀번호가 올바르지 않습니다";
 
 test.describe.configure({ mode: "serial" });
 
 test.beforeAll(async () => {
-  A = await provision("A");
-  B = await provision("B");
+  AD = await provisionAdmin("관리자");
+  S = await provisionMember("간호사", "staff");
+  G = await provisionMember("보호자", "guardian");
+  P2 = await provisionPatient("일반환자");
+  L = await provisionLegacyPatient("이전방식");
+  // 이전 방식 환자의 기존 데이터: 기록·약·진료 질문·보호자 공유·간호사 배정
+  const sl = await userSession(L.email, L.password);
+  const rec = await sl.rpc("upsert_health_record", {
+    p_patient_id: L.pid, p_record_date: todayISO(), p_condition: 4, p_pain: 2, p_fatigue: 2, p_sleep: 4, p_meal_intake: 75, p_digestion: "good", p_memo: "(가상) 이전 방식 메모",
+  });
+  if (rec.error) throw new Error(`기록 준비 실패: ${rec.error.code}`);
+  await sl.from("medications").insert({ patient_id: L.pid, name: LEGACY_MED, dosage: "1정" });
+  await sl.from("visit_questions").insert({ patient_id: L.pid, text: LEGACY_Q, shared_with_staff: true });
+  const inv = await sl.rpc("invite_guardian", { p_patient_id: L.pid, p_email: G.email, p_scopes: ["records"] });
+  if (inv.error) throw new Error(`초대 준비 실패: ${inv.error.code}`);
+  const sg = await userSession(G.email, G.password);
+  const acc = await sg.rpc("accept_guardian_invitation", { p_token: (inv.data as { token: string }).token });
+  if (acc.error) throw new Error(`초대 수락 실패: ${acc.error.code}`);
+  await assignStaff(S, L);
 });
 
 test.afterAll(async () => {
-  // 검증용 가상 계정 삭제 (환자 행 삭제 → 기록·코드·설정 권한 연쇄 삭제, 이어서 Auth 계정 삭제)
-  for (const r of created) {
-    if (r.pid) await admin.from("patients").delete().eq("id", r.pid);
-    if (r.uid) await admin.auth.admin.deleteUser(r.uid);
-  }
+  await cleanup();
 });
 
-test("1. 비밀번호 설정 전에는 세션이 있어도 기록 조회·저장 불가 (실제 RLS)", async () => {
-  // 검증용: 관리자 키로 기록 1건과 임시 비밀번호를 넣어 "설정 전 세션"을 만듦
-  const yesterday = new Date(Date.now() - 86_400_000).toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" });
-  await admin.from("health_records").insert({
-    patient_id: A.pid, record_date: yesterday, condition: 3, pain: 1, fatigue: 2, sleep: 3, meal_intake: 50, digestion: "good", recorded_in: "outpatient",
-  });
-  const temp = `Tmp${randomBytes(9).toString("base64url")}9`;
-  await admin.auth.admin.updateUserById(A.uid, { password: temp });
-  const pre = await userSession(A.email, temp);
-  const { data: rows } = await pre.from("health_records").select("id").eq("patient_id", A.pid);
-  expect(rows).toEqual([]);
-  const { error } = await pre.rpc("upsert_health_record", {
-    p_patient_id: A.pid, p_record_date: todayISO(), p_condition: 3, p_pain: 1, p_fatigue: 2, p_sleep: 3, p_meal_intake: 50, p_digestion: "good",
-  });
-  expect(error?.message ?? "").toMatch(/row-level security/);
-  await pre.auth.signOut();
-  await admin.from("health_records").delete().eq("patient_id", A.pid);
+async function newPage(browser: Browser, viewport = { width: 390, height: 844 }): Promise<Page> {
+  const ctx = await browser.newContext({ viewport, locale: "ko-KR", timezoneId: "Asia/Seoul" });
+  return ctx.newPage();
+}
+
+async function adminPage(browser: Browser, viewport?: { width: number; height: number }) {
+  const page = await newPage(browser, viewport);
+  await page.goto("/login/member", { waitUntil: "networkidle" });
+  await memberLoginForm(page, AD);
+  await expect(page).toHaveURL(/\/admin\/patients$/);
+  await expect(page.getByRole("heading", { name: "환자 계정" })).toBeVisible();
+  return page;
+}
+
+const card = (page: Page, name: string) => page.getByRole("region", { name: `${name} 계정` });
+
+async function adminResetPassword(page: Page, v: VPatient, password: string) {
+  await card(page, v.name).getByRole("button", { name: "비밀번호 재설정" }).click();
+  const dlg = page.getByRole("dialog");
+  await typeSecret(dlg.getByLabel("새 비밀번호", { exact: true }), password);
+  await typeSecret(dlg.getByLabel("새 비밀번호 확인"), password);
+  await dlg.getByRole("button", { name: "비밀번호 재설정" }).click();
+  await expect(page.getByText(`${v.name} 님의 비밀번호를 재설정했어요.`)).toBeVisible();
+}
+
+async function patientLoginFails(page: Page, loginId: string, password: string) {
+  await page.goto("/login", { waitUntil: "networkidle" });
+  await typeSecret(page.getByLabel("아이디"), loginId);
+  await typeSecret(page.getByLabel("비밀번호", { exact: true }), password);
+  await page.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: FAILED })).toBeVisible();
+  await expect(page).toHaveURL(/\/login$/);
+}
+
+test("1. 관리자: 웹에서 신규 환자 등록 (아이디·초기 비밀번호·테스트 계정)", async ({ browser }) => {
+  const page = await adminPage(browser, { width: 1366, height: 900 });
+  await page.getByRole("button", { name: "환자 등록" }).click();
+  const dlg = page.getByRole("dialog", { name: "환자 등록" });
+  await dlg.getByLabel("표시 이름").fill(N.name);
+  await typeSecret(dlg.getByLabel("로그인 아이디"), N.loginId);
+  await typeSecret(dlg.getByLabel("초기 비밀번호", { exact: true }), N.password);
+  await typeSecret(dlg.getByLabel("초기 비밀번호 확인"), N.password);
+  await expect(dlg.getByRole("switch", { name: "가상 테스트 계정" })).toHaveAttribute("aria-checked", "true");
+  await dlg.getByRole("button", { name: "등록" }).click();
+  await expect(page.getByText(`${N.name} 님을 등록했어요.`)).toBeVisible();
+  const c = card(page, N.name);
+  await expect(c.getByText(N.loginId)).toBeVisible();
+  await expect(c.getByText("활성")).toBeVisible();
+  await expect(c.getByText("테스트")).toBeVisible();
+  // 같은 아이디는 다시 쓸 수 없음
+  await page.getByRole("button", { name: "환자 등록" }).click();
+  await page.getByRole("dialog").getByLabel("표시 이름").fill("가상 검증 중복 (자동 삭제)");
+  await typeSecret(page.getByRole("dialog").getByLabel("로그인 아이디"), N.loginId);
+  await typeSecret(page.getByRole("dialog").getByLabel("초기 비밀번호", { exact: true }), N.password);
+  await typeSecret(page.getByRole("dialog").getByLabel("초기 비밀번호 확인"), N.password);
+  await page.getByRole("dialog").getByRole("button", { name: "등록" }).click();
+  await expect(page.getByRole("dialog").getByRole("alert").filter({ hasText: "이미 사용 중인 아이디" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  await shot(page, "pc-admin-patients");
+
+  const { data } = await admin.from("patients").select("id, profile_id").eq("display_name", N.name).single();
+  N.pid = data!.id;
+  N.uid = data!.profile_id;
+  track(N.uid, N.pid);
+  await page.context().close();
 });
 
-test("2. A: 코드+생년월일 → 비밀번호 설정 → 저장 → 같은 날 재저장 1건 → 새로고침 → 로그아웃 → 재로그인", async ({ page }) => {
-  await firstUse(page, A, A.birth);
-  await setPasswordAndEnter(page, A);
-
+test("2. 신규 환자: 배포 주소 → 아이디 로그인 → 기록 저장 → 관리자 비밀번호 재설정 → 이전 비밀번호 거부 → 새 비밀번호로 같은 기록", async ({ browser }) => {
+  const page = await newPage(browser);
+  await patientLogin(page, N);
   await fillCondition(page, 4);
   await page.getByRole("button", { name: "기록 저장" }).click();
   await expect(page.getByText("저장되었습니다")).toBeVisible();
-  let session = await userSession(A.email, A.password);
-  expect(await todayRows(session, A.pid)).toEqual([expect.objectContaining({ condition: 4 })]);
-
-  await page.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^2점/ }).click();
-  await page.getByRole("button", { name: "기록 수정" }).click();
-  await expect(page.getByText("저장되었습니다")).toBeVisible();
-  const afterEdit = await todayRows(session, A.pid);
-  expect(afterEdit).toHaveLength(1); // 같은 한국 날짜는 1건만 (수정)
-  expect(afterEdit[0].condition).toBe(2);
-
-  await page.reload({ waitUntil: "networkidle" });
-  await expect(page.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^2점/ })).toHaveAttribute("aria-pressed", "true");
-
-  await page.getByRole("button", { name: "로그아웃" }).click();
-  await expect(page).toHaveURL(/\/login$/);
-  await typeSecret(page.getByLabel("환자 코드"), A.code);
-  await typeSecret(page.getByLabel("비밀번호", { exact: true }), A.password);
-  await page.getByRole("button", { name: "로그인", exact: true }).click();
-  await expect(page).toHaveURL(/\/my$/);
-  await expect(page.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^2점/ })).toHaveAttribute("aria-pressed", "true");
-  // 로그인 상태에서 배포 주소(/)를 열면 /my 로 이동
-  await page.goto("/", { waitUntil: "networkidle" });
-  await expect(page).toHaveURL(/\/my$/);
+  await expectNoHorizontalOverflow(page);
+  const before = (await (await userSession(N.email, N.password)).from("health_records").select("id, condition").eq("patient_id", N.pid)).data;
+  expect(before).toEqual([expect.objectContaining({ condition: 4 })]);
   await page.getByRole("button", { name: "로그아웃" }).click();
   await expect(page).toHaveURL(/\/login$/);
 
-  session = await userSession(A.email, A.password);
-  expect(await todayRows(session, A.pid)).toHaveLength(1);
+  const ap = await adminPage(browser);
+  const newPassword = randPassword();
+  await adminResetPassword(ap, N, newPassword);
+  await ap.context().close();
+
+  await patientLoginFails(page, N.loginId, N.password);
+  N.password = newPassword;
+  await patientLogin(page, N);
+  await expect(page.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^4점/ })).toHaveAttribute("aria-pressed", "true");
+  const after = (await (await userSession(N.email, N.password)).from("health_records").select("id, condition").eq("patient_id", N.pid)).data;
+  expect(after).toEqual(before); // 같은 기록 (ID 동일)
+  await page.context().close();
 });
 
-test("3. 설정 후에는 생년월일로 다시 설정할 수 없음 (같은 안내 문구)", async ({ page }) => {
-  await firstUse(page, A, A.birth);
-  await expect(page.getByRole("alert").filter({ hasText: VERIFY_FAILED })).toBeVisible();
-  await expect(page.getByLabel("새 비밀번호", { exact: true })).toHaveCount(0);
-  // 기존 비밀번호는 그대로 유효
-  const s = await userSession(A.email, A.password);
-  await s.auth.signOut();
+test("3. 이전 방식 환자 전환: 아이디 지정 → 새 아이디 + 기존 비밀번호 → 환자 ID·Auth ID·기록·약·질문·공유·배정 유지", async ({ browser }) => {
+  const ap = await adminPage(browser);
+  const c = card(ap, L.name);
+  await expect(c.getByText("아이디 없음 · 이전 방식")).toBeVisible();
+  await expect(c.getByRole("button", { name: "영구 삭제" })).toHaveCount(0); // 테스트 계정으로 등록하지 않은 환자는 삭제 불가
+  await c.getByRole("button", { name: "아이디 지정" }).click();
+  L.loginId = randLoginId("l");
+  await typeSecret(ap.getByRole("dialog").getByLabel("로그인 아이디"), L.loginId);
+  await ap.getByRole("dialog").getByRole("button", { name: "아이디 저장" }).click();
+  await expect(ap.getByText(`${L.name} 님의 아이디를`)).toBeVisible();
+  await expect(card(ap, L.name).getByText(L.loginId)).toBeVisible();
+  await ap.context().close();
+
+  const { data: p } = await admin.from("patients").select("id, profile_id").eq("id", L.pid).single();
+  expect(p).toEqual({ id: L.pid, profile_id: L.uid }); // 환자 ID·Auth 사용자 ID 그대로
+
+  const page = await newPage(browser);
+  await patientLogin(page, L); // 새 아이디 + 기존 비밀번호
+  await expect(page.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^4점/ })).toHaveAttribute("aria-pressed", "true");
+  await menu(page, "내 약").click();
+  await expect(page.getByRole("region", { name: LEGACY_MED })).toBeVisible();
+  await menu(page, "진료 준비").click();
+  await expect(page.getByText(LEGACY_Q)).toBeVisible();
+  await menu(page, "보호자 공유").click();
+  await expect(page.getByText(G.email)).toBeVisible();
+  await page.context().close();
+
+  // 보호자·간호사는 기존 계정(/login/member)으로 그대로 확인
+  const gp = await newPage(browser);
+  await gp.goto("/login/member", { waitUntil: "networkidle" });
+  await memberLoginForm(gp, G);
+  await expect(gp).toHaveURL(/\/guardian$/);
+  await expect(gp.getByRole("heading", { name: `${L.name} 님의 안부` })).toBeVisible();
+  await gp.context().close();
+  const sp = await newPage(browser, { width: 1366, height: 900 });
+  await sp.goto("/login/member", { waitUntil: "networkidle" });
+  await memberLoginForm(sp, S);
+  await expect(sp).toHaveURL(/\/staff$/);
+  await sp.getByRole("button", { name: `${L.name} 상세 보기` }).click();
+  await expect(sp.getByText(LEGACY_Q)).toBeVisible();
+  await sp.context().close();
 });
 
-test("4. B: 잘못된 생년월일은 같은 문구로 거부 → 올바르게 설정·저장, A·B 기록은 서로 보이지 않음", async ({ page }) => {
-  await firstUse(page, B, B.wrongBirth);
-  await expect(page.getByRole("alert").filter({ hasText: VERIFY_FAILED })).toBeVisible();
+test("4. 비활성화: 이미 로그인한 기기·세션도 즉시 차단, 새 로그인 거부 → 복구하면 같은 기록", async ({ browser }) => {
+  const page = await newPage(browser);
+  await patientLogin(page, N);
+  const live = await userSession(N.email, N.password); // 비활성화 전에 로그인해 둔 세션
+  expect((await live.from("health_records").select("id").eq("patient_id", N.pid)).data).toHaveLength(1);
 
-  await page.getByLabel("생년월일 8자리").waitFor();
-  await typeSecret(page.getByLabel("생년월일 8자리"), B.birth);
-  await page.getByRole("button", { name: "본인 확인하고 시작하기" }).click();
-  await setPasswordAndEnter(page, B);
-  await fillCondition(page, 3);
-  await page.getByRole("button", { name: "기록 저장" }).click();
-  await expect(page.getByText("저장되었습니다")).toBeVisible();
-  await expectNoHorizontalOverflow(page); // 모바일 홈
+  const ap = await adminPage(browser);
+  await card(ap, N.name).getByRole("button", { name: "비활성화" }).click();
+  await ap.getByRole("dialog").getByRole("button", { name: "비활성화" }).click();
+  await expect(card(ap, N.name).getByText("비활성")).toBeVisible();
 
-  // 모바일 기록 보기: 오늘 기록이 달력·상세에 보임
-  await page.getByRole("navigation", { name: "메뉴" }).getByRole("button", { name: "기록 보기" }).click();
-  await expect(page.getByRole("heading", { name: "나의 기록" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "컨디션 흐름" })).toBeVisible();
-  await expect(page.getByText("기록 완료")).toBeVisible();
-  await expectNoHorizontalOverflow(page);
-  await page.getByRole("group", { name: "기간 선택" }).getByRole("button", { name: "30일" }).click();
-  await expectNoHorizontalOverflow(page);
-
-  const sa = await userSession(A.email, A.password);
-  const sb = await userSession(B.email, B.password);
-  expect(await todayRows(sb, B.pid)).toHaveLength(1);
-  expect(await todayRows(sa, B.pid)).toEqual([]); // A는 B 기록을 볼 수 없음
-  expect(await todayRows(sb, A.pid)).toEqual([]); // B는 A 기록을 볼 수 없음
-  const { data: patientsSeenByA } = await sa.from("patients").select("id");
-  expect(patientsSeenByA?.map((p) => p.id)).toEqual([A.pid]);
-  const { error } = await sa.rpc("upsert_health_record", {
-    p_patient_id: B.pid, p_record_date: todayISO(), p_condition: 1, p_pain: 9, p_fatigue: 5, p_sleep: 1, p_meal_intake: 0, p_digestion: "nausea",
+  expect((await live.from("health_records").select("id").eq("patient_id", N.pid)).data).toEqual([]);
+  expect((await live.from("patients").select("id")).data).toEqual([]);
+  const write = await live.rpc("upsert_health_record", {
+    p_patient_id: N.pid, p_record_date: todayISO(), p_condition: 1, p_pain: 9, p_fatigue: 5, p_sleep: 1, p_meal_intake: 0, p_digestion: "nausea",
   });
-  expect(error?.message ?? "").toMatch(/row-level security/); // A가 B 기록 작성 불가
-  expect((await todayRows(sb, B.pid))[0].condition).toBe(3);
+  expect(write.error?.message ?? "").toMatch(/row-level security/);
+  await page.reload({ waitUntil: "networkidle" });
+  await expect(page.getByText("비활성화된 계정입니다")).toBeVisible();
+  await patientLoginFails(page, N.loginId, N.password);
+
+  await card(ap, N.name).getByRole("button", { name: "복구" }).click();
+  await ap.getByRole("dialog").getByRole("button", { name: "복구" }).click();
+  await expect(card(ap, N.name).getByText("활성", { exact: true })).toBeVisible();
+  await ap.context().close();
+
+  await patientLogin(page, N);
+  await expect(page.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^4점/ })).toHaveAttribute("aria-pressed", "true");
+  await page.context().close();
 });
 
-test("5. 로그인 사용자 세션으로 서버 전용 함수 호출 불가", async () => {
-  const sa = await userSession(A.email, A.password);
-  for (const [fn, args] of [
-    ["svc_register_patient_credential", { p_patient_id: B.pid, p_login_code: generateLoginCode(), p_birth_date: "2000-01-01" }],
-    ["svc_login_lookup", { p_login_code: B.code }],
-    ["svc_verify_first_access", { p_login_code: B.code, p_birth_date: "2000-01-01" }],
-    ["create_my_patient_profile", { p_display_name: "x" }],
-  ] as const) {
-    const { error } = await sa.rpc(fn, args);
-    expect(error, fn).not.toBeNull();
+test("5. 일반 계정(환자·간호사·보호자)은 관리자 화면·API 사용 불가, 관리자도 환자 데이터 직접 조회 불가", async ({ browser }) => {
+  const pp = await newPage(browser);
+  await patientLogin(pp, P2);
+  await pp.goto("/admin/patients", { waitUntil: "networkidle" });
+  await expect(pp.getByText("관리자만 사용할 수 있습니다.")).toBeVisible();
+  for (const body of [
+    { action: "register", displayName: "x", loginId: randLoginId(), password: "carelog2026a", passwordConfirm: "carelog2026a" },
+    { action: "reset-password", patientId: L.pid, password: "carelog2026a", passwordConfirm: "carelog2026a" },
+    { action: "disable", patientId: L.pid },
+  ]) {
+    const r = await pp.request.post("/api/admin/patients", { data: body, headers: { Origin: new URL(pp.url()).origin } });
+    expect(r.status(), body.action).toBe(403);
   }
+  expect((await pp.request.get("/api/admin/patients")).status()).toBe(403);
+  await pp.context().close();
+
+  for (const m of [S, G]) {
+    const p = await newPage(browser);
+    await p.goto("/login/member", { waitUntil: "networkidle" });
+    await memberLoginForm(p, m);
+    await expect(p).toHaveURL(m === S ? /\/staff$/ : /\/guardian$/);
+    expect((await p.request.get("/api/admin/patients")).status()).toBe(403);
+    await p.context().close();
+  }
+  // 환자 화면 주소로 들어온 관리자는 관리자 화면으로, RLS로는 환자 데이터 0건
+  const ap = await adminPage(browser);
+  await ap.goto("/my", { waitUntil: "networkidle" });
+  await expect(ap).toHaveURL(/\/admin\/patients$/);
+  await ap.context().close();
+  const sa = await userSession(AD.email, AD.password);
+  for (const t of ["patients", "health_records", "medications"]) expect((await sa.from(t).select("id")).data, t).toEqual([]);
+  // 일반 환자는 /login/member, 관리자는 /login 으로 로그인할 수 없음
+  const sp2 = await newPage(browser);
+  await sp2.goto("/login/member", { waitUntil: "networkidle" });
+  await typeSecret(sp2.getByLabel("이메일"), P2.email);
+  await typeSecret(sp2.getByLabel("비밀번호", { exact: true }), P2.password);
+  await sp2.getByRole("button", { name: "로그인", exact: true }).click();
+  await expect(sp2.getByRole("alert")).toBeVisible();
+  await sp2.context().close();
 });
 
-test("6. PC 화면: 로그인 → 기록 보기에서 오늘 기록 수정 (1건 유지), 화면 잘림 없음", async ({ page }) => {
-  await page.setViewportSize({ width: 1366, height: 900 });
-  await page.goto("/login", { waitUntil: "networkidle" });
-  await expectNoHorizontalOverflow(page);
-  await typeSecret(page.getByLabel("환자 코드"), B.code);
-  await typeSecret(page.getByLabel("비밀번호", { exact: true }), B.password);
-  await page.getByRole("button", { name: "로그인", exact: true }).click();
-  await expect(page).toHaveURL(/\/my$/);
-  await expect(page.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^3점/ })).toHaveAttribute("aria-pressed", "true");
-  await expectNoHorizontalOverflow(page);
+test("6. 영구 삭제: 가상 테스트 계정만, 연결 기록 수 표시 → 이름 확인 후 삭제 (이전 방식 환자는 API도 거부)", async ({ browser }) => {
+  const ap = await adminPage(browser);
+  await card(ap, N.name).getByRole("button", { name: "영구 삭제" }).click();
+  const dlg = ap.getByRole("dialog");
+  const list = dlg.getByRole("list", { name: "삭제될 연결 기록" });
+  await expect(list.getByRole("listitem").filter({ hasText: "컨디션 기록" })).toContainText("1건");
+  await expect(dlg.getByRole("button", { name: "영구 삭제" })).toBeDisabled();
+  await dlg.getByLabel(`확인: 표시 이름 "${N.name}" 입력`).fill(N.name);
+  await dlg.getByRole("button", { name: "영구 삭제" }).click();
+  await expect(ap.getByText(`${N.name} 테스트 계정을 영구 삭제했어요.`)).toBeVisible();
+  await expect(card(ap, N.name)).toHaveCount(0);
+  expect((await admin.from("patients").select("id").eq("id", N.pid)).data).toEqual([]);
+  expect((await admin.from("health_records").select("id").eq("patient_id", N.pid)).data).toEqual([]);
+  expect((await admin.auth.admin.getUserById(N.uid)).data.user).toBeNull();
 
-  await page.getByRole("navigation", { name: "메뉴" }).getByRole("button", { name: "기록 보기" }).click();
-  await page.getByRole("button", { name: "이 날짜의 기록 수정" }).click();
-  const sheet = page.getByRole("dialog");
-  await sheet.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^5점/ }).click();
-  await sheet.getByRole("button", { name: "기록 수정" }).click();
-  await expect(sheet).toHaveCount(0); // 저장이 확정되면 닫힘
-  await expect(page.getByText("아주 좋아요").first()).toBeVisible();
-  await expectNoHorizontalOverflow(page);
-
-  const sb = await userSession(B.email, B.password);
-  const rows = await todayRows(sb, B.pid);
-  expect(rows).toHaveLength(1);
-  expect(rows[0].condition).toBe(5);
-  await page.getByRole("button", { name: "로그아웃" }).click();
-  await expect(page).toHaveURL(/\/login$/);
+  const origin = new URL(ap.url()).origin;
+  const pv = await ap.request.post("/api/admin/patients", { data: { action: "delete-preview", patientId: L.pid }, headers: { Origin: origin } });
+  expect(pv.status()).toBe(403);
+  const del = await ap.request.post("/api/admin/patients", { data: { action: "delete", patientId: L.pid, confirm: L.name }, headers: { Origin: origin } });
+  expect(del.status()).toBe(403);
+  expect((await admin.from("patients").select("id").eq("id", L.pid)).data).toHaveLength(1);
+  await ap.context().close();
 });

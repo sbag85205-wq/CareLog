@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================================
-// CareLog — 간호사·의료진 / 보호자 가상 계정 준비 + 담당 환자 배정 (carelog-dev 전용, 관리자 실행)
+// CareLog — 관리자 / 간호사·의료진 / 보호자 가상 계정 준비 + 담당 환자 배정 (carelog-dev 전용, 관리자 실행)
 //
 //   node --env-file=.env.local scripts/provision-member.mjs
 //
@@ -9,6 +9,7 @@
 //   2. 보호자 계정 만들기          (역할 guardian — 환자의 초대를 수락해야 정보가 보임)
 //   3. 담당 환자 배정              (의료진 이메일 + 환자 선택 → staff_assignments)
 //   4. 현황 보기                   (가상 계정·배정 목록, 비밀값 없음)
+//   5. 관리자 계정 만들기          (/admin/patients 에서 환자 등록·비밀번호 재설정 — admin_users 는 서버 키로만 추가)
 //
 // 보안
 //   * SUPABASE_SECRET_KEY 는 .env.local 에서만 읽음 (명령줄 인자 없음, 출력 안 함)
@@ -51,7 +52,7 @@ if (!/^[a-z]{20}$/.test(ref) || url !== `https://${ref}.supabase.co`) {
 if (!process.stdin.isTTY) die("터미널에서 직접 실행해 주세요 (비밀번호를 화면에 보이지 않게 입력받기 위해).");
 
 const admin = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
-const ROLE_NAME = { staff: "간호사·의료진", guardian: "보호자" };
+const ROLE_NAME = { staff: "간호사·의료진", guardian: "보호자", admin: "관리자" };
 
 async function findUserByEmail(email) {
   for (let page = 1; page <= 20; page++) {
@@ -66,11 +67,11 @@ async function findUserByEmail(email) {
 
 async function createMember(role) {
   console.log(`\n${ROLE_NAME[role]} 가상 계정 만들기 — 실제 이메일·실명을 쓰지 마세요.`);
-  const email = (await ask(`이메일 (예: ${role === "staff" ? "nurse1" : "guardian1"}@carelog.invalid): `)).toLowerCase();
+  const email = (await ask(`이메일 (예: ${{ staff: "nurse1", guardian: "guardian1", admin: "admin1" }[role]}@carelog.invalid): `)).toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) die("이메일 형식이 아닙니다.");
-  if (email.startsWith("patient-")) die("patient- 로 시작하는 주소는 환자 내부용입니다.");
+  if (email.startsWith("patient-") || email.endsWith("@id.carelog.invalid")) die("환자 로그인용 주소 형식은 쓸 수 없습니다.");
   if (await findUserByEmail(email)) die("이미 있는 이메일입니다. 기존 계정은 바꾸지 않습니다.");
-  const name = (await ask(`표시 이름 (예: ${role === "staff" ? "가상 간호사 김" : "가상 보호자 이"}): `)) || `가상 ${ROLE_NAME[role]}`;
+  const name = (await ask(`표시 이름 (예: ${{ staff: "가상 간호사 김", guardian: "가상 보호자 이", admin: "가상 관리자" }[role]}): `)) || `가상 ${ROLE_NAME[role]}`;
   if (name.length > 50) die("표시 이름은 50자 이하");
   const pw1 = await ask("비밀번호 (8자 이상, 영문+숫자, 화면에 표시되지 않음): ", { hidden: true });
   const pw2 = await ask("한 번 더 입력: ", { hidden: true });
@@ -86,13 +87,22 @@ async function createMember(role) {
   if (error) die(`계정 생성 실패 (${error.status ?? ""} ${error.code ?? error.message})`);
   const uid = data.user.id;
   // 역할은 서버 키(service_role)로만 변경 가능 — 화면에서 고를 수 없음
-  const { error: re } = await admin.from("profiles").update({ role, display_name: name }).eq("id", uid);
+  const { error: re } =
+    role === "admin"
+      ? await admin.from("admin_users").insert({ user_id: uid })
+      : await admin.from("profiles").update({ role, display_name: name }).eq("id", uid);
   if (re) {
     await admin.auth.admin.deleteUser(uid);
     die(`역할 지정 실패 (${re.code}) — 방금 만든 계정은 정리했습니다.`);
   }
   console.log(`\n완료: ${ROLE_NAME[role]} 계정 ${email} (${name})`);
-  console.log(role === "staff" ? "다음: 메뉴 3에서 담당 환자를 배정하세요." : "다음: 환자가 /my → 보호자 공유에서 이 이메일로 초대 링크를 만들어 전달합니다.");
+  console.log(
+    {
+      staff: "다음: 메뉴 3에서 담당 환자를 배정하세요.",
+      guardian: "다음: 환자가 /my → 보호자 공유에서 이 이메일로 초대 링크를 만들어 전달합니다.",
+      admin: "다음: /login/member 에서 이 이메일로 로그인 → /admin/patients",
+    }[role],
+  );
 }
 
 async function listPatients() {
@@ -135,18 +145,21 @@ async function status() {
     const mine = (asg ?? []).filter((a) => a.staff_id === p.id).map((a) => name(a.patient_id));
     console.log(`  - [${ROLE_NAME[p.role]}] ${p.display_name || "(이름 없음)"}${p.role === "staff" ? ` · 담당: ${mine.join(", ") || "없음"}` : ""}`);
   }
+  const { count: admins } = await admin.from("admin_users").select("user_id", { count: "exact", head: true });
+  console.log(`관리자 계정 ${admins ?? 0}개`);
   console.log(`환자 ${patients.length}명: ${patients.map((p) => p.display_name + (p.demo_code ? `(${p.demo_code})` : "")).join(", ") || "없음"}`);
 }
 
 console.log("CareLog 가상 계정 준비 (carelog-dev)");
-console.log("  1) 간호사·의료진 계정 만들기\n  2) 보호자 계정 만들기\n  3) 담당 환자 배정\n  4) 현황 보기");
+console.log("  1) 간호사·의료진 계정 만들기\n  2) 보호자 계정 만들기\n  3) 담당 환자 배정\n  4) 현황 보기\n  5) 관리자 계정 만들기");
 const choice = await ask("번호: ");
 try {
-  if (choice === "1") await createMember("staff");
+  if (choice === "5") await createMember("admin");
+  else if (choice === "1") await createMember("staff");
   else if (choice === "2") await createMember("guardian");
   else if (choice === "3") await assign();
   else if (choice === "4") await status();
-  else die("1~4 중에서 골라 주세요.");
+  else die("1~5 중에서 골라 주세요.");
 } catch (e) {
   die(e.message);
 }

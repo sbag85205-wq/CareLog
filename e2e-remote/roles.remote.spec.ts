@@ -16,7 +16,6 @@ import {
   fillCondition,
   memberLoginForm,
   menu,
-  patientFirstUse,
   patientLogin,
   provisionMember,
   provisionPatient,
@@ -59,7 +58,7 @@ async function newPage(browser: Browser, viewport = { width: 390, height: 844 })
 
 test("1. 환자 A: 통원 기록 → 내 약 → 진료 준비 → 보호자 초대 → 입원 전환 → 식사·생활 요청", async ({ browser }) => {
   const page = await newPage(browser);
-  await patientFirstUse(page, A);
+  await patientLogin(page, A);
 
   // 통원: 오늘의 컨디션
   await fillCondition(page, 4);
@@ -309,14 +308,13 @@ test("6. 차단: 미배정 간호사·초대 없는 보호자·철회된 보호�
   const write = await g1.from("life_requests").insert({ patient_id: A.pid, category: "water", detail: "x" });
   expect(write.error?.message ?? "").toMatch(/row-level security/);
 
-  // 환자 B는 A의 어떤 정보도 볼 수 없음 (B는 비밀번호 설정 전 → 본인 정보도 권한 없음)
   const { data: s1rows } = await (await userSession(S1.email, S1.password)).from("patients").select("id");
   expect(s1rows?.map((r) => r.id)).toEqual([A.pid]); // S1은 담당 A만
 });
 
-test("7. 환자 B: 처음 이용 후 자기 기록만, A·간호사1 화면 정보와 분리", async ({ browser }) => {
+test("7. 환자 B: 아이디 로그인 후 자기 기록만, A·간호사1 화면 정보와 분리", async ({ browser }) => {
   const page = await newPage(browser);
-  await patientFirstUse(page, B);
+  await patientLogin(page, B);
   await expect(page.getByText(A.name)).toHaveCount(0);
   await menu(page, "내 약").click();
   await expect(page.getByText("아직 등록한 약이 없어요.", { exact: false })).toBeVisible();

@@ -9,7 +9,7 @@ with
     where n.nspname = 'public' and c.relkind = 'r'
       and c.relname in ('profiles', 'patients', 'admissions', 'staff_assignments', 'guardian_invitations',
                         'access_grants', 'health_records', 'medications', 'drug_info_cache', 'visit_questions',
-                        'meal_menus', 'meal_logs', 'life_requests', 'staff_reviews', 'staff_review_notes')
+                        'meal_menus', 'meal_logs', 'life_requests', 'staff_reviews', 'staff_review_notes', 'admin_users')
   ),
   fn as (
     select p.oid, n.nspname || '.' || p.proname as name, p.prosecdef, p.proconfig
@@ -19,11 +19,11 @@ with
 select check_name, ok, detail
 from (
   values
-    ('carelog_tables_15', (select count(*) = 15 from tbl), (select count(*)::text from tbl)),
+    ('carelog_tables_16', (select count(*) = 16 from tbl), (select count(*)::text from tbl)),
     ('rls_enabled_all', not exists (select 1 from tbl where not relrowsecurity),
       (select coalesce(string_agg(relname, ', '), '없음') from tbl where not relrowsecurity)),
-    -- migration 5(28개) + migration 8(4개)의 정책 수와 정확히 일치해야 함 (정책 추가·삭제 시 이 값도 함께 수정)
-    ('policies_count_32', (select count(*) = 32 from pg_policies where schemaname = 'public'),
+    -- migration 5(28개) + 8(4개) + 9(1개, admin_users)의 정책 수와 정확히 일치해야 함 (정책 추가·삭제 시 이 값도 함께 수정)
+    ('policies_count_33', (select count(*) = 33 from pg_policies where schemaname = 'public'),
       (select count(*)::text from pg_policies where schemaname = 'public')),
     ('anon_no_table_privileges',
       not exists (select 1 from tbl where has_table_privilege('anon', oid, 'select,insert,update,delete')),

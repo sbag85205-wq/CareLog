@@ -5,6 +5,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { expect, type Locator, type Page } from "@playwright/test";
+import { loginIdToEmail } from "../src/lib/patient-auth/login-id";
 import { generateLoginCode } from "../src/lib/patient-auth/rules";
 
 export const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -14,42 +15,74 @@ export const admin = createClient(URL, process.env.SUPABASE_SECRET_KEY!, {
 });
 const DOMAIN = process.env.CARELOG_PATIENT_EMAIL_DOMAIN ?? "carelog.invalid";
 
-export type VPatient = { label: string; name: string; uid: string; pid: string; email: string; code: string; birth: string; password: string };
+export type VPatient = { label: string; name: string; uid: string; pid: string; email: string; loginId: string; password: string };
 export type VMember = { label: string; name: string; uid: string; email: string; password: string };
 
 const created: { uid?: string; pid?: string }[] = [];
-const randPassword = () => `Cl${randomBytes(12).toString("base64url")}7`;
+export const randPassword = () => `Cl${randomBytes(12).toString("base64url")}7`;
+export const randLoginId = (prefix = "t") => `${prefix}${randomBytes(6).toString("hex")}`;
 
-function virtualBirth(): string {
-  const t = Date.UTC(1950, 0, 1) + Math.floor(Math.random() * 50 * 365) * 86_400_000;
-  return new Date(t).toISOString().slice(0, 10).replaceAll("-", "");
+/** 정리 대상으로 등록 (관리자 화면에서 만든 계정 등) */
+export function track(uid?: string, pid?: string) {
+  created.push({ uid, pid });
 }
 
+/** 관리자가 아이디로 발급하는 환자 (테스트 계정 표시) */
 export async function provisionPatient(label: string): Promise<VPatient> {
-  const email = `patient-${randomUUID()}@${DOMAIN}`;
+  const loginId = randLoginId();
+  const email = loginIdToEmail(loginId);
   const name = `가상 검증 ${label} (자동 삭제)`;
+  const password = randPassword();
   const rec: { uid?: string; pid?: string } = {};
   created.push(rec);
   const { data: u, error: ue } = await admin.auth.admin.createUser({
     email,
-    password: randomBytes(32).toString("base64url"),
+    password,
     email_confirm: true,
     user_metadata: { display_name: name },
+    app_metadata: { carelog_test: true },
   });
   if (ue) throw new Error(`Auth 계정 생성 실패: ${ue.status ?? ""} ${ue.code ?? ue.message}`);
   rec.uid = u.user.id;
   const { data: p, error: pe } = await admin.from("patients").insert({ profile_id: u.user.id, display_name: name }).select("id").single();
   if (pe) throw new Error(`환자 생성 실패: ${pe.code}`);
   rec.pid = p.id;
-  const code = generateLoginCode();
-  const birth = virtualBirth();
-  const { error: re } = await admin.rpc("svc_register_patient_credential", {
-    p_patient_id: p.id,
-    p_login_code: code,
-    p_birth_date: `${birth.slice(0, 4)}-${birth.slice(4, 6)}-${birth.slice(6, 8)}`,
-  });
-  if (re) throw new Error(`환자 코드 등록 실패: ${re.code}`);
-  return { label, name, uid: u.user.id, pid: p.id, email, code, birth, password: randPassword() };
+  return { label, name, uid: u.user.id, pid: p.id, email, loginId, password };
+}
+
+/** 이전 방식(환자 코드) 환자 — 아이디 없음, 비밀번호는 이미 설정한 상태 */
+export async function provisionLegacyPatient(label: string): Promise<VPatient> {
+  const email = `patient-${randomUUID()}@${DOMAIN}`;
+  const name = `가상 검증 ${label} (자동 삭제)`;
+  const password = randPassword();
+  const rec: { uid?: string; pid?: string } = {};
+  created.push(rec);
+  const { data: u, error: ue } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { display_name: name } });
+  if (ue) throw new Error(`Auth 계정 생성 실패: ${ue.status ?? ""} ${ue.code ?? ue.message}`);
+  rec.uid = u.user.id;
+  const { data: p, error: pe } = await admin.from("patients").insert({ profile_id: u.user.id, display_name: name }).select("id").single();
+  if (pe) throw new Error(`환자 생성 실패: ${pe.code}`);
+  rec.pid = p.id;
+  const { error: re } = await admin.rpc("svc_register_patient_credential", { p_patient_id: p.id, p_login_code: generateLoginCode(), p_birth_date: "1970-01-01" });
+  if (re) throw new Error(`코드 등록 실패: ${re.code}`);
+  const { error: me } = await admin.rpc("svc_mark_password_set", { p_patient_id: p.id });
+  if (me) throw new Error(`설정 완료 표시 실패: ${me.code}`);
+  return { label, name, uid: u.user.id, pid: p.id, email, loginId: "", password };
+}
+
+/** 관리자 계정 (admin_users 는 서버 키로만 추가) */
+export async function provisionAdmin(label: string): Promise<VMember> {
+  const email = `admin-${randomUUID().slice(0, 8)}@${DOMAIN}`;
+  const name = `가상 검증 ${label}`;
+  const password = randPassword();
+  const rec: { uid?: string } = {};
+  created.push(rec);
+  const { data: u, error } = await admin.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { display_name: name } });
+  if (error) throw new Error(`Auth 계정 생성 실패: ${error.status ?? ""} ${error.code ?? error.message}`);
+  rec.uid = u.user.id;
+  const { error: ae } = await admin.from("admin_users").insert({ user_id: u.user.id });
+  if (ae) throw new Error(`관리자 지정 실패: ${ae.code}`);
+  return { label, name, uid: u.user.id, email, password };
 }
 
 /** 관리자가 준비하는 의료진·보호자 가상 계정 (역할은 서버 키로만 부여) */
@@ -96,28 +129,15 @@ export async function typeSecret(locator: Locator, value: string) {
   }, value);
 }
 
-/** 배포 주소(/) → 처음 이용하기 → 비밀번호 설정 → /my */
-export async function patientFirstUse(page: Page, v: VPatient) {
+/** 배포 주소(/) → /login → 아이디 + 비밀번호 → /my */
+export async function patientLogin(page: Page, v: VPatient, password = v.password) {
   await page.goto("/", { waitUntil: "networkidle" });
   await expect(page).toHaveURL(/\/login$/);
-  await page.getByRole("tab", { name: "처음 이용하기" }).click();
-  await typeSecret(page.getByLabel("환자 코드"), v.code);
-  await typeSecret(page.getByLabel("생년월일 8자리"), v.birth);
-  await page.getByRole("button", { name: "본인 확인하고 시작하기" }).click();
-  await expect(page.getByText("10분 안에 새 비밀번호를 설정해 주세요")).toBeVisible();
-  await typeSecret(page.getByLabel("새 비밀번호", { exact: true }), v.password);
-  await typeSecret(page.getByLabel("새 비밀번호 확인"), v.password);
-  await page.getByRole("button", { name: "설정하고 내 건강기록으로" }).click();
-  await expect(page).toHaveURL(/\/my$/);
-  await expect(page.getByRole("heading", { name: `${v.name} 님, 안녕하세요.` })).toBeVisible();
-}
-
-export async function patientLogin(page: Page, v: VPatient) {
-  await page.goto("/login", { waitUntil: "networkidle" });
-  await typeSecret(page.getByLabel("환자 코드"), v.code);
-  await typeSecret(page.getByLabel("비밀번호", { exact: true }), v.password);
+  await typeSecret(page.getByLabel("아이디"), v.loginId);
+  await typeSecret(page.getByLabel("비밀번호", { exact: true }), password);
   await page.getByRole("button", { name: "로그인", exact: true }).click();
   await expect(page).toHaveURL(/\/my$/);
+  await expect(page.getByRole("heading", { name: `${v.name} 님, 안녕하세요.` })).toBeVisible();
 }
 
 /** 보호자·의료진 로그인 폼 (이메일 + 비밀번호) */

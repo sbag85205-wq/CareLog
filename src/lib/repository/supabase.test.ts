@@ -130,6 +130,20 @@ describe("Supabase 저장소 (DB 모드)", () => {
     expect(g.calls.some((c) => c.table === "health_records")).toBe(false); // 볼 환자가 없으면 조회 생략
   });
 
+  it("관리자: 환자 데이터는 조회하지 않음 / 비활성화된 계정: 이유를 안내하고 더 조회하지 않음", async () => {
+    const ad = fakeClient({ tables: { admin_users: { user_id: "adm-1" } } });
+    const arepo = createSupabaseRepository(ad.client, "adm-1", { today: () => TODAY });
+    await arepo.load();
+    expect(arepo.getSnapshot()!.viewer.role).toBe("admin");
+    expect(ad.calls.some((c) => c.table === "patients" || c.table === "health_records")).toBe(false);
+
+    const off = fakeClient({ tables: { profiles: { id: "user-a", role: "patient", display_name: "", disabled_at: "2026-11-20T00:00:00Z" } } });
+    const orepo = createSupabaseRepository(off.client, "user-a", { today: () => TODAY });
+    await orepo.load();
+    expect(orepo.getLoadState()).toMatchObject({ state: "error", message: expect.stringContaining("비활성화된 계정") });
+    expect(off.calls.some((c) => c.table === "health_records")).toBe(false);
+  });
+
   it("같은 날짜 재저장은 화면에서도 1건으로 교체", async () => {
     const { client, calls } = fakeClient({ rpcResult: { data: row("2026-11-14", 1), error: null } });
     const repo = createSupabaseRepository(client, "user-a", { today: () => TODAY });

@@ -35,7 +35,7 @@ import { DATA_VERSION } from "./migrate";
 import type { CareLogRepository } from "./types";
 
 export type LoadState = { state: "idle" | "loading" | "ready" | "error"; message?: string };
-export type ViewerRole = "patient" | "staff" | "guardian";
+export type ViewerRole = "patient" | "staff" | "guardian" | "admin";
 
 export interface Invitation {
   id: string;
@@ -272,6 +272,29 @@ const mapInvitation = (i: any): Invitation => ({
 });
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
+/** 관리자: 환자 데이터는 RLS로 읽지 않음 (계정 관리는 서버 API) */
+function emptySnapshot(userId: string, displayName: string): DbSnapshot {
+  return {
+    version: DATA_VERSION,
+    seededAt: new Date().toISOString(),
+    users: [],
+    patients: [],
+    admissions: [],
+    records: [],
+    medications: [],
+    visitQuestions: [],
+    mealLogs: [],
+    requests: [],
+    reviews: [],
+    accessGrants: [],
+    viewer: { userId, role: "admin", displayName },
+    invitations: [],
+    grants: [],
+    reviewNotes: {},
+    menus: [],
+  };
+}
+
 export function createSupabaseRepository(
   client: SupabaseClient,
   userId: string,
@@ -288,9 +311,17 @@ export function createSupabaseRepository(
   };
 
   async function fetchAll(): Promise<DbSnapshot> {
-    const { data: prof, error: pre } = await client.from("profiles").select("id, role, display_name").eq("id", userId).maybeSingle();
+    const [{ data: prof, error: pre }, { data: adminRow }] = await Promise.all([
+      client.from("profiles").select("id, role, display_name, disabled_at").eq("id", userId).maybeSingle(),
+      client.from("admin_users").select("user_id").eq("user_id", userId).maybeSingle(),
+    ]);
     if (pre) throw pre;
-    const role: ViewerRole = prof?.role === "staff" || prof?.role === "guardian" ? prof.role : "patient";
+    if (prof?.disabled_at) {
+      // 서버(RLS)도 이미 모든 조회를 막고 있음 — 화면에는 이유를 안내
+      throw new CareLogError("forbidden", "비활성화된 계정입니다. 병원(관리자)에 문의해 주세요.");
+    }
+    const role: ViewerRole = adminRow ? "admin" : prof?.role === "staff" || prof?.role === "guardian" ? prof.role : "patient";
+    if (role === "admin") return emptySnapshot(userId, prof?.display_name ?? "");
 
     let pq = client.from("patients").select(PATIENT_COLUMNS);
     if (role === "patient") pq = pq.eq("profile_id", userId);

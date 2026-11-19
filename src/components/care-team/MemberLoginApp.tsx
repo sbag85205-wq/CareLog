@@ -24,11 +24,11 @@ export function MemberLoginApp() {
           <div className="relative">
             <Wordmark sub="케어로그" />
             <h1 className="mt-10 text-[1.85rem] leading-snug font-extrabold tracking-tight text-ink">
-              보호자·의료진
+              보호자·의료진·관리자
               <br />
               로그인
             </h1>
-            <p className="mt-3 text-ink-soft">관리자가 준비한 계정의 이메일과 비밀번호로 로그인해요.</p>
+            <p className="mt-3 text-ink-soft">미리 준비된 계정의 이메일과 비밀번호로 로그인해요.</p>
             <LeafIllustration className="absolute top-12 -right-1 h-28 w-24" />
           </div>
           <div className="mt-8">
@@ -38,7 +38,7 @@ export function MemberLoginApp() {
             <p>
               환자이신가요?{" "}
               <Link href="/login" className="font-semibold text-sage-700 underline underline-offset-4">
-                환자 코드로 로그인
+                아이디로 로그인
               </Link>
             </p>
             <p>DB 연동 시험 화면 · 가상 계정만 사용하세요.</p>

@@ -66,8 +66,9 @@ localStorage.removeItem("carelog.dev.latencyMs"); localStorage.removeItem("carel
 | 경로 | 누가 | 내용 |
 | --- | --- | --- |
 | `/` | 모두 | 로그인 전 → `/login`, 로그인 후 → 서버가 확인한 역할의 화면 |
-| `/login` | 환자 | **처음 이용하기**(환자 코드 + 생년월일 8자리 → 새 비밀번호) / **로그인**(환자 코드 + 비밀번호) |
-| `/login/member` | 보호자·간호사/의료진 | 이메일 + 비밀번호 (관리자가 준비한 계정, 공개 가입 없음) |
+| `/login` | 환자 | 관리자가 발급한 **아이디 + 비밀번호** (검증·세션은 Supabase Auth, 역할은 서버 확인) |
+| `/login/member` | 보호자·간호사/의료진·관리자 | 이메일 + 비밀번호 (미리 준비한 계정, 공개 가입 없음) |
+| `/admin/patients` | 관리자 | 환자 목록(표시 이름·아이디·상태) · 등록 · 아이디 지정(기존 환자 전환) · 비밀번호 재설정 · 비활성화·복구 · 가상 테스트 계정 영구 삭제 |
 | `/my` | 환자 | 홈(통원·입원 전환, 오늘의 컨디션, 입원 시 오늘의 식사·생활 요청) · 기록 보기(7일/30일, 달력, 날짜별 수정, 입원 이력) · 내 약(추가·수정·삭제, 보호자 공개) · 진료 준비(다음 진료일, 2주 요약, 질문·의료진 공유) · 보호자 공유(초대·항목 변경·철회) |
 | `/staff` | 간호사·의료진 | 담당 환자 목록(30일 평균·기록 일수·시연용 분류) · 환자별 상세·공유된 질문 · 검토 상태 저장(내부 메모) · 담당 환자의 생활 요청 처리 |
 | `/guardian` | 보호자 | 최근 안부(기록 시각) → 공유받은 항목만 읽기 전용 |
@@ -76,8 +77,10 @@ localStorage.removeItem("carelog.dev.latencyMs"); localStorage.removeItem("carel
 
 - **권한은 화면이 아니라 DB(RLS)가 결정합니다.** 역할은 `profiles.role`(관리자만 변경)에서 읽고, 다른 역할 주소로 들어오면 자기 화면으로 이동합니다. 조회 결과 자체가 역할·담당 배정·공유 범위로 걸러집니다.
 - 가상 계정 준비 (관리자, 터미널에서 실행 — 비밀값은 화면에 보이지 않게 입력):
-  - 환자: `node --env-file=.env.local scripts/provision-virtual-patient.mjs` → 환자 코드 1회 표시
-  - 간호사·의료진 / 보호자 / 담당 배정: `node --env-file=.env.local scripts/provision-member.mjs` (메뉴 1·2·3·4)
+  - 첫 관리자: `node --env-file=.env.local scripts/provision-member.mjs` → 메뉴 5 → `/login/member` 로그인 → `/admin/patients`
+  - 환자: `/admin/patients` 에서 등록 (아이디·초기 비밀번호), 비밀번호를 잊으면 같은 화면에서 재설정
+  - 간호사·의료진 / 보호자 / 담당 배정: 같은 스크립트 메뉴 1·2·3 (4는 현황)
+  - 환자 코드 방식(`provision-virtual-patient.mjs`, 처음 이용하기)은 2026-11-20부터 사용하지 않음
 - 화면 디자인(아이보리·세이지)은 `src/components/patient-ui/`의 공통 컴포넌트를 사용합니다. 데모(`/demo`)는 기존 `components/ui/primitives.tsx`를 그대로 씁니다.
 - Supabase 설정이 없으면 `/login`은 "설정 없음" 안내만 표시합니다. 준비 절차는 [supabase/README.md](supabase/README.md)의 "3단계"·"4단계"를 따릅니다.
 - `npm run test:db` 는 PGlite에서 migration·RLS·로그인 흐름을 검증합니다.
@@ -129,3 +132,4 @@ Supabase 전환 분석·설계와 단계별 계획은 [docs/supabase-migration-p
 4. **식약처 공공데이터 API**: 서버 Route Handler(`/api/medications/[itemSeq]`)에서 `MFDS_API_KEY`로 e약은요 API 호출,
    `MedicationInfoProvider` 구현 추가 (키는 클라이언트에 노출 금지)
 5. 생활 요청 실시간 알림(Supabase Realtime), 감사 로그, 개인정보 처리 동의 화면
+
