@@ -74,7 +74,7 @@ test("1. 환자 A: 통원 기록 → 내 약 → 진료 준비 → 보호자 초
     await page.getByRole("button", { name: "약 추가" }).first().click();
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("약 이름").fill(name);
-    await dlg.getByLabel("안내받은 용량").fill("1회 1정");
+    await dlg.getByLabel("1회 복용량 (안내받은 대로)").fill("1회 1정");
     await dlg.getByLabel("복용 시간").fill("아침 식후");
     await dlg.getByRole("textbox", { name: "메모" }).fill("(가상) 물과 함께");
     if (pub) await dlg.getByRole("switch", { name: "보호자에게 공개" }).click();

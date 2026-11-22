@@ -85,7 +85,8 @@ localStorage.removeItem("carelog.dev.latencyMs"); localStorage.removeItem("carel
 - Supabase 설정이 없으면 `/login`은 "설정 없음" 안내만 표시합니다. 준비 절차는 [supabase/README.md](supabase/README.md)의 "3단계"·"4단계"를 따릅니다.
 - `npm run test:db` 는 PGlite에서 migration·RLS·로그인 흐름을 검증합니다.
 - `npm run test:e2e:remote` 는 carelog-dev에 검증용 가상 계정(환자·간호사·보호자)을 만들어 브라우저로 확인하고 삭제합니다. `E2E_REMOTE_SERVER=prod` 를 붙이면 배포와 같은 프로덕션 빌드로 실행합니다.
-- 배포(Vercel) 환경변수: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`(Sensitive). 처음 이용하기 실패 원인은 런타임 로그의 `[patient-auth]` 줄로 구분합니다.
+- 배포(Vercel) 환경변수: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`(Sensitive), `MFDS_SERVICE_KEY`(Sensitive, 공공데이터포털 Decoding 키 — 내 약 추가의 식약처 검색).
+- 내 약 → 약 추가: 식약처 **의약품 제품 허가정보**(getDrugPrdtPrmsnInq08) 검색 — 서버 `/api/medications/search`(로그인 필요, 검색어는 요청 본문)만 외부 API를 호출하고 검색어만 보냅니다. 고른 제품은 약 이름과 품목기준코드만 저장하고, 1회 복용량·복용 시간은 직접 입력합니다. 검색이 안 돼도 직접 입력해 저장할 수 있습니다. 처음 이용하기 실패 원인은 런타임 로그의 `[patient-auth]` 줄로 구분합니다.
 
 ## 폴더 구조
 
@@ -129,7 +130,6 @@ Supabase 전환 분석·설계와 단계별 계획은 [docs/supabase-migration-p
    `meal_logs`, `life_requests`, `staff_reviews`, `access_grants`, `profiles(role)` 테이블 생성
 2. **Supabase Auth + RLS**: 환자는 본인 행만, 의료진은 `assigned_staff` 환자만, 보호자는 `access_grants` 범위만 조회하도록 정책 작성
 3. **Repository 교체**: `createSupabaseRepository()` 구현 → 역할 전환 데모 메뉴를 실제 로그인으로 대체
-4. **식약처 공공데이터 API**: 서버 Route Handler(`/api/medications/[itemSeq]`)에서 `MFDS_API_KEY`로 e약은요 API 호출,
-   `MedicationInfoProvider` 구현 추가 (키는 클라이언트에 노출 금지)
+4. **식약처 e약은요(효능·용법) 상세 연동**: 저장된 품목기준코드(`external_item_seq`)로 서버에서 조회 (제품 허가정보 검색은 완료)
 5. 생활 요청 실시간 알림(Supabase Realtime), 감사 로그, 개인정보 처리 동의 화면
 

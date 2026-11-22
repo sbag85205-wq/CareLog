@@ -5,7 +5,8 @@
  * "의약품개요정보(e약은요)" API(DrbEasyDrugInfoService)를 서버 측(Route Handler)에서 호출하는
  * 구현을 추가하고, Medication.externalItemSeq(품목기준코드)로 조회하면 됩니다.
  *
- * ⚠️ API 키는 서버 환경변수(MFDS_API_KEY)로만 사용하고 클라이언트에 노출하지 마세요.
+ * ⚠️ API 키는 서버 환경변수(MFDS_SERVICE_KEY)로만 사용하고 클라이언트에 노출하지 마세요.
+ * (제품 허가정보 검색은 src/server/mfds/drug-search.ts — 내 약 추가 화면에서 사용 중)
  */
 import type { Medication } from "@/types";
 

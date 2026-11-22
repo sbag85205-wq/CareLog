@@ -81,6 +81,11 @@ export interface MedicationInput {
   schedule: string;
   caution: string;
   visibleToGuardian?: boolean;
+  /**
+   * 식약처 허가정보 검색에서 고른 제품의 품목기준코드(ITEM_SEQ).
+   * 문자열: 검색으로 고른 약 / null: 직접 입력(코드 지움) / 생략: 바꾸지 않음(수정 시)
+   */
+  externalItemSeq?: string | null;
 }
 
 export interface SupabaseRepository extends CareLogRepository {
@@ -417,12 +422,20 @@ export function createSupabaseRepository(
     return out as T;
   }
 
-  const medRow = (i: MedicationInput) => ({
-    name: i.name.trim(),
-    dosage: i.dosage.trim(),
-    schedule: i.schedule.trim(),
-    caution: i.caution.trim(),
-  });
+  const medRow = (i: MedicationInput) => {
+    const row: Record<string, unknown> = {
+      name: i.name.trim(),
+      dosage: i.dosage.trim(),
+      schedule: i.schedule.trim(),
+      caution: i.caution.trim(),
+    };
+    if (i.externalItemSeq !== undefined) {
+      const seq = i.externalItemSeq && /^[0-9]{6,12}$/.test(i.externalItemSeq) ? i.externalItemSeq : null;
+      row.source = seq ? "mfds_permit" : "manual"; // DB 제약: manual 이 아니면 품목기준코드 필수
+      row.external_item_seq = seq;
+    }
+    return row;
+  };
 
   return {
     getSnapshot: () => data,

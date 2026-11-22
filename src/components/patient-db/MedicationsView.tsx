@@ -3,7 +3,8 @@
 import { Pencil, Pill, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { PageTitle } from "@/components/patient-ui/AppShell";
-import { Alert, PButton, PCard, SoftSheet, StatusPill, Switch, TextArea, TextField } from "@/components/patient-ui/kit";
+import { DrugSearch, type DrugItem } from "@/components/patient-db/DrugSearch";
+import { Alert, Notice, PButton, PCard, SoftSheet, StatusPill, Switch, TextArea, TextField } from "@/components/patient-ui/kit";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import type { MedicationInput, SupabaseRepository } from "@/lib/repository/supabase";
 import type { Medication } from "@/types";
@@ -71,6 +72,7 @@ export function MedicationsView({
                       {m.name}
                     </p>
                     <p className="mt-1 text-sm text-ink-soft">{[m.dosage, m.schedule].filter(Boolean).join(" · ") || "용량·복용 시간 미입력"}</p>
+                    {m.source === "mfds" && <p className="mt-1 text-xs text-ink-soft">식약처 허가정보에서 선택한 제품</p>}
                   </div>
                   {!editable && m.visibleToGuardian && <StatusPill tone="outline">보호자 공개</StatusPill>}
                 </div>
@@ -109,7 +111,7 @@ export function MedicationsView({
                           variant="secondary"
                           icon={Pencil}
                           onClick={() =>
-                            setEditing({ id: m.id, input: { name: m.name, dosage: m.dosage, schedule: m.schedule, caution: m.caution } })
+                            setEditing({ id: m.id, input: { name: m.name, dosage: m.dosage, schedule: m.schedule, caution: m.caution, externalItemSeq: m.externalItemSeq } })
                           }
                         >
                           수정
@@ -182,6 +184,8 @@ function MedicationForm({
   error: string | null;
 }) {
   const [v, setV] = useState(initial);
+  // 식약처 검색으로 고른 제품 (약 이름만 채움). 이름을 직접 고치면 선택이 풀리고 직접 입력으로 저장
+  const [picked, setPicked] = useState<DrugItem | null>(null);
   return (
     <form
       className="space-y-4"
@@ -192,8 +196,34 @@ function MedicationForm({
       }}
     >
       <PCard className="space-y-5">
-        <TextField label="약 이름" value={v.name} maxLength={100} required onChange={(e) => setV({ ...v, name: e.target.value })} placeholder="예: 가상약 10mg" />
-        <TextField label="안내받은 용량" value={v.dosage} maxLength={50} onChange={(e) => setV({ ...v, dosage: e.target.value })} placeholder="예: 1회 1정" />
+        <DrugSearch
+          onSelect={(it) => {
+            setPicked(it);
+            setV({ ...v, name: it.name.slice(0, 100), externalItemSeq: it.itemSeq || null });
+          }}
+        />
+        {picked && (
+          <Notice>
+            선택한 제품: {picked.name} · {picked.company || "제조사 정보 없음"}
+            {picked.category && ` · ${picked.category}`}
+          </Notice>
+        )}
+        <TextField
+          label="약 이름"
+          value={v.name}
+          maxLength={100}
+          required
+          onChange={(e) => {
+            const name = e.target.value;
+            if (picked && name !== picked.name.slice(0, 100)) setPicked(null);
+            // 검색으로 고른 이름을 직접 고치면 품목기준코드를 지우고 직접 입력으로 저장
+            const changedFromPick = picked ? name !== picked.name.slice(0, 100) : Boolean(v.externalItemSeq);
+            setV({ ...v, name, ...(changedFromPick ? { externalItemSeq: null } : {}) });
+          }}
+          placeholder="검색하지 않고 직접 입력해도 돼요"
+          helper="안내받은 약 이름을 그대로 적어 주세요."
+        />
+        <TextField label="1회 복용량 (안내받은 대로)" value={v.dosage} maxLength={50} onChange={(e) => setV({ ...v, dosage: e.target.value })} placeholder="예: 1회 1정" />
         <TextField label="복용 시간" value={v.schedule} maxLength={100} onChange={(e) => setV({ ...v, schedule: e.target.value })} placeholder="예: 아침 식후 30분" />
         <TextArea label="메모" value={v.caution} maxLength={500} counter rows={3} onChange={(e) => setV({ ...v, caution: e.target.value })} placeholder="예: 물과 함께 천천히 (가상 데이터만 입력)" />
         {isNew && (
