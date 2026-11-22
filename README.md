@@ -73,7 +73,7 @@ localStorage.removeItem("carelog.dev.latencyMs"); localStorage.removeItem("carel
 | `/staff` | 간호사·의료진 | 담당 환자 목록(30일 평균·기록 일수·시연용 분류) · 환자별 상세·공유된 질문 · 검토 상태 저장(내부 메모) · 담당 환자의 생활 요청 처리 |
 | `/guardian` | 보호자 | 최근 안부(기록 시각) → 공유받은 항목만 읽기 전용 |
 | `/invite#t=…` | 보호자 | 환자가 만든 초대 링크를 자기 계정으로 수락 (토큰은 주소의 `#` 뒤에만 있어 서버 로그에 남지 않음) |
-| `/demo` | 누구나 | 기존 가상 데이터 데모 — 역할을 바꿔 보는 체험 (localStorage, 로그인 없음) |
+| `/demo` | 누구나 (포스터 QR) | 가상 데이터 데모 — 로그인 버전과 **같은 화면**으로 환자·의료진·보호자 역할 전환, 통원·입원 전환, 예제 처방전 불러오기, 데모 데이터 초기화 (가상 데이터는 이 브라우저 localStorage에만) |
 
 - **권한은 화면이 아니라 DB(RLS)가 결정합니다.** 역할은 `profiles.role`(관리자만 변경)에서 읽고, 다른 역할 주소로 들어오면 자기 화면으로 이동합니다. 조회 결과 자체가 역할·담당 배정·공유 범위로 걸러집니다.
 - 가상 계정 준비 (관리자, 터미널에서 실행 — 비밀값은 화면에 보이지 않게 입력):
@@ -86,6 +86,8 @@ localStorage.removeItem("carelog.dev.latencyMs"); localStorage.removeItem("carel
 - `npm run test:db` 는 PGlite에서 migration·RLS·로그인 흐름을 검증합니다.
 - `npm run test:e2e:remote` 는 carelog-dev에 검증용 가상 계정(환자·간호사·보호자)을 만들어 브라우저로 확인하고 삭제합니다. `E2E_REMOTE_SERVER=prod` 를 붙이면 배포와 같은 프로덕션 빌드로 실행합니다.
 - 배포(Vercel) 환경변수: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`(Sensitive), `MFDS_SERVICE_KEY`(Sensitive, 공공데이터포털 Decoding 키 — 내 약 추가의 식약처 검색).
+- 내 약 → **처방전 불러오기**: 사진 찍기(모바일 카메라)·사진/PDF 파일 → 텍스트 PDF는 PDF.js로 글자 추출, 사진·스캔 PDF는 브라우저 안 OCR(Tesseract.js 한국어+영어, 표 선 제거 전처리) → 약 줄마다 보험코드 또는 약 이름으로 기존 식약처 검색 → 저장 전 미리보기(확인됨·확인 필요·직접 입력, 모든 칸 수정) → `선택한 약 N개 한 번에 등록`(한 번의 요청, 이미 등록된 약은 기본 제외). 처방전 원본·전체 인식 텍스트는 서버로 보내지 않습니다. OCR 엔진·언어 데이터는 처음 한 번 공개 CDN에서 내려받습니다.
+- 공개 데모는 `src/lib/repository/demo.ts`가 가상 데이터를 로그인 버전 화면 형식으로 바꾸고 역할별로 걸러 줍니다(체험용 화면 필터 — 실제 권한은 로그인 버전의 RLS). 데모의 식약처 검색은 가상 카탈로그(`src/lib/demo/drug-catalog.ts`)입니다.
 - 내 약 → 약 추가: 식약처 **의약품 제품 허가정보**(getDrugPrdtPrmsnInq08) 검색 — 서버 `/api/medications/search`(로그인 필요, 검색어는 요청 본문)만 외부 API를 호출하고 검색어만 보냅니다. 고른 제품은 약 이름과 품목기준코드만 저장하고, 1회 복용량·복용 시간은 직접 입력합니다. 검색이 안 돼도 직접 입력해 저장할 수 있습니다. 처음 이용하기 실패 원인은 런타임 로그의 `[patient-auth]` 줄로 구분합니다.
 
 ## 폴더 구조

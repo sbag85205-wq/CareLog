@@ -181,6 +181,8 @@ export interface AccessGrant {
   role: Role;
   scopes: AccessScope[];
   approvedAt: string;
+  /** 공유 철회 시각 (데모) */
+  revokedAt?: string;
 }
 
 /**

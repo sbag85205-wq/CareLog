@@ -53,6 +53,16 @@ describe("요청 만들기 (외부로는 검색어만)", () => {
     expect(url.searchParams.get("item_name")).toBe("타이레놀");
     expect(url.searchParams.get("type")).toBe("json");
   });
+  it("보험코드 조회는 edi_code 만 (item_name 없음), 9자리 숫자만 허용", async () => {
+    const url = new URL(buildSearchUrl(FAKE_KEY, { edi: "600000011" }));
+    expect(url.searchParams.get("edi_code")).toBe("600000011");
+    expect(url.searchParams.has("item_name")).toBe(false);
+    const f = fakeFetch(okBody({ item: [{ ...ITEM_A, EDI_CODE: "600000011" }] }, 1));
+    const r = await searchDrugs({ edi: "600000011" }, { serviceKey: FAKE_KEY, fetch: f });
+    expect(r.ok && r.items[0].ediCode).toBe("600000011");
+    expect(new URL(f.calls[0].url).searchParams.get("edi_code")).toBe("600000011");
+    expect(await searchDrugs({ edi: "60000001" }, { serviceKey: FAKE_KEY, fetch: f })).toEqual({ ok: false, reason: "bad_query" });
+  });
   it("실수로 Encoding 키를 넣어도 이중 인코딩하지 않음", () => {
     expect(normalizeServiceKey("fAkE%2Bkey%2Ffor%3D%3Dtest")).toBe(FAKE_KEY);
     expect(normalizeServiceKey(` ${FAKE_KEY} `)).toBe(FAKE_KEY);

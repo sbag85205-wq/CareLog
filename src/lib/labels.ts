@@ -103,3 +103,8 @@ export const SCOPE_LABEL: Record<AccessScope, string> = {
 export const CONDITION_FACE = ["", "매우 나쁨", "나쁨", "보통", "좋음", "매우 좋음"];
 export const FATIGUE_LABEL = ["", "거의 없음", "조금", "보통", "많음", "매우 많음"];
 export const SLEEP_LABEL = ["", "매우 나쁨", "나쁨", "보통", "좋음", "매우 좋음"];
+
+/** 병실 표시: "302" → "302호", 이미 "703호"면 그대로 */
+export function roomLabel(room: string): string {
+  return /호$/.test(room.trim()) ? room.trim() : `${room.trim()}호`;
+}

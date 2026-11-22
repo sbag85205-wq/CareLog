@@ -22,6 +22,8 @@ export function AppShell<T extends string>({
   roleLabel,
   userLabel,
   onLogout,
+  topBar,
+  sideNote,
   loadState,
   onRetry,
   ready,
@@ -32,7 +34,12 @@ export function AppShell<T extends string>({
   onTab: (t: T) => void;
   roleLabel: string;
   userLabel?: string;
-  onLogout: () => void;
+  /** 없으면 로그아웃 버튼을 숨김 (공개 데모) */
+  onLogout?: () => void;
+  /** 화면 맨 위 띠 (공개 데모: 가상 데이터 표시·역할 전환) */
+  topBar?: ReactNode;
+  /** PC 왼쪽 메뉴 아래쪽 안내 문구 */
+  sideNote?: ReactNode;
   loadState: LoadState | null;
   onRetry: () => void;
   ready: boolean;
@@ -44,7 +51,9 @@ export function AppShell<T extends string>({
   };
   const showTabs = tabs.length > 1;
   return (
-    <div className="min-h-dvh bg-ivory text-ink lg:flex">
+    <div className="min-h-dvh bg-ivory text-ink">
+      {topBar}
+      <div className="lg:flex">
       {/* PC: 왼쪽 메뉴 */}
       <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line bg-ivory px-5 py-7 lg:flex">
         <Wordmark sub="케어로그" />
@@ -61,11 +70,13 @@ export function AppShell<T extends string>({
         )}
         <div className="mt-auto space-y-3">
           <p className="rounded-2xl bg-ivory-deep px-4 py-3 text-xs leading-relaxed text-ink-soft">
-            DB 연동 시험 (carelog-dev) · 가상 계정 전용입니다. 실제 환자정보를 입력하지 마세요.
+            {sideNote ?? "DB 연동 시험 (carelog-dev) · 가상 계정 전용입니다. 실제 환자정보를 입력하지 마세요."}
           </p>
-          <PButton variant="secondary" size="md" icon={LogOut} className="w-full" onClick={onLogout}>
-            로그아웃
-          </PButton>
+          {onLogout && (
+            <PButton variant="secondary" size="md" icon={LogOut} className="w-full" onClick={onLogout}>
+              로그아웃
+            </PButton>
+          )}
         </div>
       </aside>
 
@@ -78,9 +89,11 @@ export function AppShell<T extends string>({
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <span className="text-xs whitespace-nowrap text-ink-soft max-[359px]:hidden">{roleLabel}</span>
-              <PButton variant="ghost" size="sm" icon={LogOut} onClick={onLogout}>
-                로그아웃
-              </PButton>
+              {onLogout && (
+                <PButton variant="ghost" size="sm" icon={LogOut} onClick={onLogout}>
+                  로그아웃
+                </PButton>
+              )}
             </div>
           </div>
         </header>
@@ -113,6 +126,7 @@ export function AppShell<T extends string>({
             </div>
           </nav>
         )}
+      </div>
       </div>
     </div>
   );

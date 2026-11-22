@@ -5,8 +5,7 @@
  *   import { createSupabaseRepository } from "./supabase";
  *   export const repository = createSupabaseRepository();
  */
-import { createLocalStorageRepository } from "./local-storage";
-import type { CareLogRepository } from "./types";
+import { createLocalStorageRepository, type LocalRepository } from "./local-storage";
 
-export const repository: CareLogRepository = createLocalStorageRepository();
+export const repository: LocalRepository = createLocalStorageRepository();
 export type * from "./types";

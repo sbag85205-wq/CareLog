@@ -11,13 +11,13 @@ import { CONDITION_WORD, SLEEP_WORD } from "@/components/patient-ui/labels";
 import { useDbApp } from "@/hooks/useDbApp";
 import { formatKoreanDate, formatKoreanTime, todayISO } from "@/lib/date";
 import { currentAdmission } from "@/lib/domain/admissions";
-import { MODE_LABEL, SCOPE_LABEL } from "@/lib/labels";
+import { MODE_LABEL, roomLabel, SCOPE_LABEL } from "@/lib/labels";
 import type { DbSnapshot } from "@/lib/repository/supabase";
 import { medicationsOf, recordsOf, requestsOf } from "@/lib/selectors";
 import type { AccessScope, HealthRecord, Patient } from "@/types";
 
 type Tab = "home";
-const TABS: ShellTab<Tab>[] = [{ id: "home", label: "안부", icon: HeartHandshake }];
+export const GUARDIAN_TABS: ShellTab<Tab>[] = [{ id: "home", label: "안부", icon: HeartHandshake }];
 
 /**
  * 로그인 버전 — 보호자 (읽기 전용)
@@ -29,7 +29,7 @@ export function GuardianApp() {
 
   return (
     <AppShell
-      tabs={TABS}
+      tabs={GUARDIAN_TABS}
       active="home"
       onTab={() => {}}
       roleLabel="보호자"
@@ -44,7 +44,8 @@ export function GuardianApp() {
   );
 }
 
-function GuardianHome({ snapshot, selected, onSelect }: { snapshot: DbSnapshot; selected: string | null; onSelect: (id: string) => void }) {
+/** 보호자 화면 내용 (로그인 버전·공개 데모 공용) */
+export function GuardianHome({ snapshot, selected, onSelect }: { snapshot: DbSnapshot; selected: string | null; onSelect: (id: string) => void }) {
   const patients = snapshot.patients;
   if (patients.length === 0) {
     return (
@@ -82,7 +83,7 @@ function GuardianPatient({ snapshot, patient, scopes }: { snapshot: DbSnapshot; 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-[1.75rem] leading-tight font-extrabold tracking-tight break-keep text-ink sm:text-3xl">{patient.name} 님의 안부</h1>
           <StatusPill tone="outline">
-            {MODE_LABEL[patient.careMode]} 중{admission && admission.room !== "미입력" ? ` · ${admission.room}호` : ""}
+            {MODE_LABEL[patient.careMode]} 중{admission && admission.room !== "미입력" ? ` · ${roomLabel(admission.room)}` : ""}
           </StatusPill>
         </div>
         <p className="mt-2 text-sm text-ink-soft">공유받은 항목: {scopes.length ? scopes.map((s) => SCOPE_LABEL[s]).join(" · ") : "없음"} · 읽기 전용</p>

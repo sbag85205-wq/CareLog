@@ -3,18 +3,9 @@
 import { Search } from "lucide-react";
 import { useState } from "react";
 import { Alert, cn, Notice, PButton, StatusPill } from "@/components/patient-ui/kit";
+import { useDrugSearch, type DrugItem } from "@/lib/drug-search-client";
 
-/** 서버(/api/medications/search)가 돌려주는 식약처 의약품 제품 허가정보 (응답에 있는 범위만) */
-export interface DrugItem {
-  itemSeq: string;
-  name: string;
-  company: string;
-  ingredient: string;
-  category: string;
-  productType: string;
-  permitDate: string;
-  canceled: boolean;
-}
+export type { DrugItem };
 
 const fmtDate = (d: string) => (/^\d{8}$/.test(d) ? `${d.slice(0, 4)}.${d.slice(4, 6)}.${d.slice(6, 8)}` : d);
 
@@ -27,8 +18,9 @@ export function DrugSearch({ onSelect }: { onSelect: (item: DrugItem) => void })
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<{ q: string; items: DrugItem[]; total: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const search = useDrugSearch();
 
-  async function search() {
+  async function runSearch() {
     const query = q.trim();
     if (pending || query.length < 2) {
       if (query.length < 2) setError("약 이름을 2자 이상 입력해 주세요.");
@@ -38,18 +30,9 @@ export function DrugSearch({ onSelect }: { onSelect: (item: DrugItem) => void })
     setError(null);
     setResult(null);
     try {
-      const res = await fetch("/api/medications/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: query }), // 검색어는 본문으로 (주소·접근 로그에 남지 않게)
-        credentials: "same-origin",
-        cache: "no-store",
-      });
-      const r = (await res.json()) as { ok: boolean; message?: string; items?: DrugItem[]; total?: number };
-      if (!r.ok) setError(r.message ?? "식약처 검색을 사용할 수 없어요. 약 이름을 직접 입력해 저장할 수 있어요.");
-      else setResult({ q: query, items: r.items ?? [], total: r.total ?? 0 });
-    } catch {
-      setError("식약처 검색에 연결하지 못했어요. 약 이름을 직접 입력해 저장할 수 있어요.");
+      const r = await search({ q: query }); // 실제: 서버 검색 API (검색어는 요청 본문) / 데모: 가상 검색
+      if (!r.ok) setError(r.message);
+      else setResult({ q: query, items: r.items, total: r.total });
     } finally {
       setPending(false);
     }
@@ -71,13 +54,13 @@ export function DrugSearch({ onSelect }: { onSelect: (item: DrugItem) => void })
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault(); // 바깥 약 저장 폼이 제출되지 않게
-              void search();
+              void runSearch();
             }
           }}
           placeholder="예: 타이레놀"
           className="h-12 min-w-0 flex-1 rounded-2xl border border-line bg-white px-4 text-base text-ink outline-none focus:border-sage-500 focus:ring-4 focus:ring-sage-100"
         />
-        <PButton size="md" icon={Search} className="!min-h-12 shrink-0" onClick={() => void search()} disabled={pending}>
+        <PButton size="md" icon={Search} className="!min-h-12 shrink-0" onClick={() => void runSearch()} disabled={pending}>
           {pending ? "검색 중…" : "검색"}
         </PButton>
       </div>

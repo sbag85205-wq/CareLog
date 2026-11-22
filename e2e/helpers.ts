@@ -27,10 +27,10 @@ export async function setDevFlags(page: Page, flags: { latencyMs?: number; failW
   }, flags);
 }
 
+/** 공개 데모(/demo) 열기 — 로그인 없이 환자 홈 */
 export async function openApp(page: Page) {
-  page.on("dialog", (d) => void d.accept());
   await page.goto("/demo", { waitUntil: "networkidle" });
-  await page.getByText("님, 안녕하세요").waitFor();
+  await page.getByText("님, 안녕하세요").first().waitFor();
 }
 
 export async function expectNoHorizontalOverflow(page: Page) {
@@ -38,13 +38,19 @@ export async function expectNoHorizontalOverflow(page: Page) {
   expect(overflow).toBe(false);
 }
 
-export const tab = (page: Page, name: string) => page.getByRole("button", { name, exact: true });
+/** 화면 메뉴 (모바일 하단 탭 / PC 왼쪽 메뉴 — 보이는 쪽) */
+export const menu = (page: Page, name: string) => page.getByRole("navigation", { name: "메뉴" }).getByRole("button", { name, exact: true });
 
+/** 통원·입원 전환 (확인 창 포함) */
 export async function switchMode(page: Page, mode: "통원" | "입원") {
-  await page.getByRole("radio", { name: new RegExp(`${mode} 모드`) }).click();
-  await expect(page.getByRole("radio", { name: new RegExp(`${mode} 모드`) })).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("group", { name: "이용 모드" }).getByRole("button", { name: mode }).click();
+  const dlg = page.getByRole("dialog", { name: `${mode} 모드로 바꾸기` });
+  await dlg.getByRole("button", { name: `${mode}으로 바꾸기` }).click();
+  await expect(dlg).toHaveCount(0);
+  await expect(page.getByText(`${mode} 중`, { exact: true })).toBeVisible();
 }
 
 export async function switchRole(page: Page, role: "환자" | "의료진" | "보호자") {
-  await page.getByRole("tab", { name: role }).click();
+  await page.getByRole("tablist", { name: "데모 역할" }).getByRole("tab", { name: role }).click();
+  await expect(page.getByRole("tablist", { name: "데모 역할" }).getByRole("tab", { name: role })).toHaveAttribute("aria-selected", "true");
 }

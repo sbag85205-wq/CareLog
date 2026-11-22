@@ -18,11 +18,26 @@ import { readDevFlags, type DevFlags } from "@/lib/dev-flags";
 import { applyCareMode } from "@/lib/domain/admissions";
 import { checkRequestTransition } from "@/lib/domain/request-status";
 import { CareLogError } from "@/lib/errors";
-import type { CareLogData, HealthRecord, LifeRequest, MealLog, StaffReview, VisitQuestion } from "@/types";
+import type { AccessScope, CareLogData, HealthRecord, LifeRequest, MealLog, Medication, StaffReview, VisitQuestion } from "@/types";
+import type { MedicationInput } from "./supabase";
 import { DATA_VERSION, migrateData } from "./migrate";
 import type { CareLogRepository, HealthRecordInput } from "./types";
 
 export const STORAGE_KEY = "carelog.demo-data.v1";
+
+/** 로그인 버전 화면을 데모에서 그대로 쓰기 위한 추가 쓰기 (가상 데이터, 이 브라우저에만 저장) */
+export interface LocalDemoWrites {
+  setVisitQuestionShared(id: string, shared: boolean): Promise<void>;
+  setNextVisitDate(patientId: string, date: string | null): Promise<void>;
+  addMedications(patientId: string, inputs: MedicationInput[]): Promise<void>;
+  updateMedication(id: string, input: MedicationInput): Promise<void>;
+  deleteMedication(id: string): Promise<void>;
+  setMedicationVisibility(id: string, visible: boolean): Promise<void>;
+  updateGrantScopes(grantId: string, scopes: AccessScope[]): Promise<void>;
+  revokeGrant(grantId: string): Promise<void>;
+}
+
+export type LocalRepository = CareLogRepository & LocalDemoWrites;
 
 type Mutation = (d: CareLogData) => CareLogData;
 type Prepared<T> = { noop: true; result: T } | { noop?: false; mutate: Mutation; result: T };
@@ -59,7 +74,7 @@ function assertRecord(input: HealthRecordInput) {
   }
 }
 
-export function createLocalStorageRepository(options: LocalRepositoryOptions = {}): CareLogRepository {
+export function createLocalStorageRepository(options: LocalRepositoryOptions = {}): LocalRepository {
   const getStorage = options.storage ?? (() => window.localStorage);
   const getFlags = options.devFlags ?? readDevFlags;
   const today = options.today ?? (() => todayISO());
@@ -328,6 +343,104 @@ export function createLocalStorageRepository(options: LocalRepositoryOptions = {
         const review: StaffReview = { ...input, id: newId("RV"), createdAt: nowISO() };
         return { result: review, mutate: (d) => ({ ...d, reviews: [...d.reviews, review] }) };
       }, false);
+    },
+
+    setVisitQuestionShared(id, shared) {
+      return write<void>(() => ({
+        result: undefined,
+        mutate: (d) => {
+          if (!d.visitQuestions.some((q) => q.id === id)) throw new CareLogError("not_found", "질문을 찾을 수 없습니다.");
+          return { ...d, visitQuestions: d.visitQuestions.map((q) => (q.id === id ? { ...q, sharedWithStaff: shared } : q)) };
+        },
+      }), true);
+    },
+
+    setNextVisitDate(patientId, date) {
+      return write<void>(() => ({
+        result: undefined,
+        mutate: (d) => ({ ...d, patients: d.patients.map((p) => (p.id === patientId ? { ...p, nextVisitDate: date ?? undefined } : p)) }),
+      }), false);
+    },
+
+    addMedications(patientId, inputs) {
+      // 여러 약을 한 번에 확정 (전부 저장되거나 전부 실패)
+      return write<void>(() => {
+        if (inputs.some((i) => !i.name.trim() || i.name.trim().length > 100)) {
+          throw new CareLogError("invalid_input", "약 이름을 1~100자로 입력해 주세요.");
+        }
+        const now = nowISO();
+        const meds: Medication[] = inputs.map((i) => ({
+          id: newId("M"),
+          patientId,
+          name: i.name.trim(),
+          purpose: "",
+          dosage: i.dosage.trim(),
+          schedule: i.schedule.trim(),
+          caution: i.caution.trim(),
+          source: i.externalItemSeq ? "mfds" : "manual",
+          externalItemSeq: i.externalItemSeq ?? undefined,
+          visibleToGuardian: Boolean(i.visibleToGuardian),
+          updatedAt: now,
+          isDemo: true,
+        }));
+        return { result: undefined, mutate: (d) => ({ ...d, medications: [...d.medications, ...meds] }) };
+      }, false);
+    },
+
+    updateMedication(id, input) {
+      return write<void>(() => ({
+        result: undefined,
+        mutate: (d) => {
+          if (!d.medications.some((m) => m.id === id)) throw new CareLogError("not_found", "약을 찾을 수 없습니다.");
+          return {
+            ...d,
+            medications: d.medications.map((m) =>
+              m.id === id
+                ? {
+                    ...m,
+                    name: input.name.trim(),
+                    dosage: input.dosage.trim(),
+                    schedule: input.schedule.trim(),
+                    caution: input.caution.trim(),
+                    ...(input.externalItemSeq !== undefined && {
+                      externalItemSeq: input.externalItemSeq ?? undefined,
+                      source: input.externalItemSeq ? ("mfds" as const) : ("manual" as const),
+                    }),
+                    updatedAt: nowISO(),
+                  }
+                : m,
+            ),
+          };
+        },
+      }), false);
+    },
+
+    deleteMedication(id) {
+      return write<void>(() => ({
+        result: undefined,
+        mutate: (d) => ({ ...d, medications: d.medications.filter((m) => m.id !== id) }),
+      }), true);
+    },
+
+    setMedicationVisibility(id, visible) {
+      return write<void>(() => ({
+        result: undefined,
+        mutate: (d) => ({ ...d, medications: d.medications.map((m) => (m.id === id ? { ...m, visibleToGuardian: visible } : m)) }),
+      }), true);
+    },
+
+    updateGrantScopes(grantId, scopes) {
+      return write<void>(() => {
+        if (scopes.length === 0) throw new CareLogError("invalid_input", "공유 범위를 하나 이상 선택하거나 공유를 철회해 주세요.");
+        return { result: undefined, mutate: (d) => ({ ...d, accessGrants: d.accessGrants.map((g) => (g.id === grantId ? { ...g, scopes } : g)) }) };
+      }, false);
+    },
+
+    revokeGrant(grantId) {
+      return write<void>(() => ({
+        result: undefined,
+        mutate: (d) => ({ ...d, accessGrants: d.accessGrants.map((g) => (g.id === grantId ? { ...g, revokedAt: g.revokedAt ?? nowISO() } : g)) }),
+      }), false);
     },
 
     async resetDemoData() {

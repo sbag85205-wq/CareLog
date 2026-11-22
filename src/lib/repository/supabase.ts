@@ -98,6 +98,8 @@ export interface SupabaseRepository extends CareLogRepository {
   setNextVisitDate(patientId: string, date: string | null): Promise<void>;
 
   addMedication(patientId: string, input: MedicationInput): Promise<void>;
+  /** 여러 약을 한 번의 요청으로 저장 (전부 저장되거나 전부 실패 — 재시도해도 일부만 중복되지 않음) */
+  addMedications(patientId: string, inputs: MedicationInput[]): Promise<void>;
   updateMedication(id: string, input: MedicationInput): Promise<void>;
   deleteMedication(id: string): Promise<void>;
   setMedicationVisibility(id: string, visible: boolean): Promise<void>;
@@ -554,6 +556,14 @@ export function createSupabaseRepository(
       const { error } = await client
         .from("medications")
         .insert({ patient_id: patientId, ...medRow(input), visible_to_guardian: Boolean(input.visibleToGuardian) });
+      if (error) throw toCareLogError(error);
+      await refresh();
+    },
+    async addMedications(patientId, inputs) {
+      if (inputs.length === 0) return;
+      const { error } = await client
+        .from("medications")
+        .insert(inputs.map((input) => ({ patient_id: patientId, ...medRow(input), visible_to_guardian: Boolean(input.visibleToGuardian) })));
       if (error) throw toCareLogError(error);
       await refresh();
     },

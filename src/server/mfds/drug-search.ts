@@ -29,6 +29,8 @@ export interface DrugSearchItem {
   permitDate: string;
   /** 취하 여부 (CANCEL_DATE·CANCEL_NAME) */
   canceled: boolean;
+  /** 보험코드 (EDI_CODE) — 응답에 있는 경우만 */
+  ediCode: string;
 }
 
 export type DrugSearchResult =
@@ -60,14 +62,21 @@ export function normalizeServiceKey(raw: string | undefined): string {
   return k;
 }
 
-export function buildSearchUrl(serviceKey: string, query: string): string {
+/** 보험코드: 9자리 숫자만 (처방전에서 명확히 읽힌 경우) */
+export function normalizeEdi(v: unknown): string | null {
+  return typeof v === "string" && /^\d{9}$/.test(v.trim()) ? v.trim() : null;
+}
+
+/** 검색 조건은 품목명(item_name) 또는 보험코드(edi_code) 중 하나만 보냄 */
+export function buildSearchUrl(serviceKey: string, query: string | { edi: string }): string {
   const params = new URLSearchParams({
     serviceKey, // Decoding 키 → URLSearchParams가 한 번만 인코딩
     type: "json",
     pageNo: "1",
     numOfRows: String(SEARCH_LIMIT),
-    item_name: query,
   });
+  if (typeof query === "string") params.set("item_name", query);
+  else params.set("edi_code", query.edi);
   return `${MFDS_PERMIT_LIST_URL}?${params.toString()}`;
 }
 
@@ -95,6 +104,7 @@ function toItem(raw: Record<string, unknown>): DrugSearchItem | null {
     productType: str(raw.PRDUCT_TYPE).replace(/^\s*\[[^\]]*\]\s*/, ""),
     permitDate: str(raw.ITEM_PERMIT_DATE),
     canceled: Boolean(str(raw.CANCEL_DATE)) || /취하|취소/.test(str(raw.CANCEL_NAME)),
+    ediCode: str(raw.EDI_CODE),
   };
 }
 
@@ -109,11 +119,15 @@ function extractItems(items: unknown): Record<string, unknown>[] {
   return [];
 }
 
+/**
+ * @param query 약 이름(문자열) 또는 { edi: 보험코드 9자리 }
+ */
 export async function searchDrugs(
   query: unknown,
   deps: { serviceKey?: string; fetch?: typeof fetch; timeoutMs?: number } = {},
 ): Promise<DrugSearchResult> {
-  const q = normalizeDrugQuery(query);
+  const edi = query && typeof query === "object" ? normalizeEdi((query as { edi?: unknown }).edi) : null;
+  const q = edi ? { edi } : normalizeDrugQuery(query);
   if (!q) return { ok: false, reason: "bad_query" };
   const key = normalizeServiceKey(deps.serviceKey ?? process.env.MFDS_SERVICE_KEY);
   if (!key) return { ok: false, reason: "not_configured" };

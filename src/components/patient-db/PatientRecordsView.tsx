@@ -7,7 +7,7 @@ import { PatientConditionForm } from "@/components/patient-db/PatientConditionFo
 import { CardHeading, cn, PButton, PCard, Segmented, SoftSheet, StatusPill } from "@/components/patient-ui/kit";
 import { CONDITION_WORD, SLEEP_WORD } from "@/components/patient-ui/labels";
 import { addDays, formatDotDate, formatKoreanTime, formatLongKoreanDate, lastNDates, parseISODate } from "@/lib/date";
-import { DIGESTION_LABEL, MEAL_INTAKE_LABEL, MODE_LABEL } from "@/lib/labels";
+import { DIGESTION_LABEL, MEAL_INTAKE_LABEL, MODE_LABEL, roomLabel } from "@/lib/labels";
 import type { Admission, HealthRecord, Patient } from "@/types";
 
 /** 저장소가 불러오는 기간과 같음 (lib/repository/supabase.ts HISTORY_DAYS) */
@@ -404,7 +404,7 @@ function AdmissionHistory({ admissions }: { admissions: Admission[] }) {
               {formatLongKoreanDate(a.admittedOn, false).replace(/ \S+요일$/, "")} ~ {a.dischargedOn ? formatLongKoreanDate(a.dischargedOn, false).replace(/ \S+요일$/, "") : "입원 중"}
             </span>
             <span className="text-ink-soft">
-              {a.ward === "미입력" ? "병동 미입력" : a.ward} · {a.room === "미입력" ? "병실 미입력" : `${a.room}호`} · {a.source === "self_reported" ? "자기기록" : "병원 확인"}
+              {a.ward === "미입력" ? "병동 미입력" : a.ward} · {a.room === "미입력" ? "병실 미입력" : roomLabel(a.room)} · {a.source === "self_reported" ? "자기기록" : "병원 확인"}
             </span>
           </li>
         ))}

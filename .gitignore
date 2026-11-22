@@ -54,3 +54,6 @@ next-env.d.ts
 /test-results/
 /playwright-report/
 /.e2e-libs/
+
+# Tesseract.js 언어 데이터 캐시 (Node에서 OCR 실행 시 생성)
+*.traineddata

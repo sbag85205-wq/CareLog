@@ -16,13 +16,14 @@ import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useDbApp } from "@/hooks/useDbApp";
 import { formatKoreanDate, formatKoreanTime, formatLongKoreanDate, lastNDates, todayISO } from "@/lib/date";
 import { currentAdmission } from "@/lib/domain/admissions";
-import { MODE_LABEL } from "@/lib/labels";
+import { MODE_LABEL, roomLabel } from "@/lib/labels";
 import type { DbSnapshot, SupabaseRepository } from "@/lib/repository/supabase";
 import { admissionsOf, medicationsOf, questionsOf, recordsOf } from "@/lib/selectors";
 import type { Admission, CareMode, HealthRecord, Patient } from "@/types";
 
-type Tab = "home" | "records" | "meds" | "visit" | "share";
-const TABS: ShellTab<Tab>[] = [
+export type PatientTab = "home" | "records" | "meds" | "visit" | "share";
+type Tab = PatientTab;
+export const PATIENT_TABS: ShellTab<Tab>[] = [
   { id: "home", label: "홈", icon: House },
   { id: "records", label: "기록 보기", icon: ChartNoAxesColumn },
   { id: "meds", label: "내 약", icon: Pill },
@@ -38,7 +39,7 @@ export function MyRecordsApp() {
 
   return (
     <AppShell
-      tabs={TABS}
+      tabs={PATIENT_TABS}
       active={tab}
       onTab={setTab}
       roleLabel="가상 환자"
@@ -57,18 +58,21 @@ export function MyRecordsApp() {
   );
 }
 
-function PatientTabs({
+/** 환자 화면 탭 내용 (로그인 버전·공개 데모 공용) */
+export function PatientTabs({
   tab,
   setTab,
   snapshot,
   patient,
   repo,
+  demo = false,
 }: {
   tab: Tab;
   setTab: (t: Tab) => void;
   snapshot: DbSnapshot;
   patient: Patient;
   repo: SupabaseRepository;
+  demo?: boolean;
 }) {
   // 현재 날짜는 데이터가 준비된 뒤(브라우저)에서만 계산 — 사전 렌더링 중 new Date() 사용 금지 (cacheComponents)
   const today = todayISO();
@@ -78,7 +82,7 @@ function PatientTabs({
     case "records":
       return <PatientRecordsView patient={patient} records={records} today={today} admissions={admissions} />;
     case "meds":
-      return <MedicationsView medications={medicationsOf(snapshot, patient.id)} patientId={patient.id} repo={repo} editable />;
+      return <MedicationsView medications={medicationsOf(snapshot, patient.id)} patientId={patient.id} repo={repo} editable demo={demo} />;
     case "visit":
       return <VisitPrepView patient={patient} records={records} questions={questionsOf(snapshot, patient.id)} today={today} repo={repo} />;
     case "share":
@@ -178,7 +182,7 @@ function HomeView({
           {inpatient && admission && (
             <p className="mt-2 text-sm text-ink-soft">
               {formatKoreanDate(admission.admittedOn, false)} 입원 · {admission.ward === "미입력" ? "병동 미입력" : admission.ward}
-              {admission.room !== "미입력" && ` ${admission.room}호`} · 자기기록
+              {admission.room !== "미입력" && ` ${roomLabel(admission.room)}`} · 자기기록
             </p>
           )}
         </div>

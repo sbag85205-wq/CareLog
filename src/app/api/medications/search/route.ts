@@ -8,7 +8,7 @@ import { createSessionClient } from "@/server/supabase/session";
 const limiter = createRateLimiter(30, 60_000);
 
 const MESSAGES = {
-  bad_query: "약 이름을 2자 이상 입력해 주세요.",
+  bad_query: "약 이름을 2자 이상(또는 보험코드 9자리) 입력해 주세요.",
   not_configured: "지금은 식약처 검색을 사용할 수 없어요. 약 이름을 직접 입력해 저장할 수 있어요.",
   upstream: "식약처 검색이 잠시 응답하지 않아요. 약 이름을 직접 입력해 저장할 수 있어요.",
 } as const;
@@ -27,7 +27,8 @@ export async function POST(req: NextRequest) {
     return json({ ok: false, message: "검색 요청이 많아요. 잠시 후 다시 시도해 주세요." }, 429);
   }
   const body = await readJson(req);
-  const r = await searchDrugs(body?.q);
+  // 약 이름 검색어 또는 처방전에서 읽은 보험코드(9자리) 중 하나만 받음
+  const r = await searchDrugs(typeof body?.edi === "string" ? { edi: body.edi } : body?.q);
   if (!r.ok) {
     const status = r.reason === "bad_query" ? 400 : 503;
     return json({ ok: false, reason: r.reason, message: MESSAGES[r.reason] }, status);

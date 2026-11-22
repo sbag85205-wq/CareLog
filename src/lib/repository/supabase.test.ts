@@ -177,9 +177,18 @@ describe("Supabase 저장소 (DB 모드)", () => {
     await repo.load();
     await repo.addMedication("pid-a", { name: " 가상 약 ", dosage: "1정", schedule: "아침", caution: "" });
     expect(calls.find((c) => c.table === "medications" && c.op === "insert")!.payload).toMatchObject({ name: "가상 약", visible_to_guardian: false });
+    // 처방전 일괄 등록: 한 번의 insert (배열)
+    await repo.addMedications("pid-a", [
+      { name: "가상정", dosage: "1회 1정", schedule: "하루 3회", caution: "", externalItemSeq: "200000001" },
+      { name: "직접 입력 약", dosage: "", schedule: "", caution: "", externalItemSeq: null },
+    ]);
+    const bulk = calls.filter((c) => c.table === "medications" && c.op === "insert").at(-1)!.payload as Record<string, unknown>[];
+    expect(bulk).toHaveLength(2);
+    expect(bulk[0]).toMatchObject({ patient_id: "pid-a", source: "mfds_permit", external_item_seq: "200000001", visible_to_guardian: false });
+    expect(bulk[1]).toMatchObject({ source: "manual", external_item_seq: null });
     // 식약처 검색으로 고른 약: 품목기준코드와 출처 저장 / 직접 입력으로 바꾸면 코드 지움
     await repo.addMedication("pid-a", { name: "가상정10밀리그램", dosage: "1정", schedule: "아침", caution: "", externalItemSeq: "200000001" });
-    expect(calls.filter((c) => c.table === "medications" && c.op === "insert")[1].payload).toMatchObject({ source: "mfds_permit", external_item_seq: "200000001" });
+    expect(calls.filter((c) => c.table === "medications" && c.op === "insert").at(-1)!.payload).toMatchObject({ source: "mfds_permit", external_item_seq: "200000001" });
     await repo.updateMedication("med-1", { name: "직접 입력한 약", dosage: "", schedule: "", caution: "", externalItemSeq: null });
     expect(calls.find((c) => c.table === "medications" && c.op === "update")!.payload).toMatchObject({ source: "manual", external_item_seq: null });
 

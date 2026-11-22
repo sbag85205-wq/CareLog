@@ -11,14 +11,15 @@ import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useDbApp } from "@/hooks/useDbApp";
 import { formatDateTime, formatKoreanDate, todayISO } from "@/lib/date";
 import { nextRequestStatus } from "@/lib/domain/request-status";
-import { MODE_LABEL, REQUEST_STATUS_LABEL, TRIAGE_LABEL } from "@/lib/labels";
+import { MODE_LABEL, REQUEST_STATUS_LABEL, roomLabel, TRIAGE_LABEL } from "@/lib/labels";
 import type { DbSnapshot, SupabaseRepository } from "@/lib/repository/supabase";
 import { admissionsOf, medicationsOf, questionsOf, recordsOf, requestsForStaff, reviewsOf } from "@/lib/selectors";
 import { summarizeAll, TRIAGE_RULES } from "@/lib/triage";
 import type { LifeRequest, PatientSummary, ReviewAction, TriageFlag } from "@/types";
 
-type Tab = "patients" | "requests";
-const TABS: ShellTab<Tab>[] = [
+export type StaffTab = "patients" | "requests";
+type Tab = StaffTab;
+export const STAFF_TABS: ShellTab<Tab>[] = [
   { id: "patients", label: "담당 환자", icon: UsersRound },
   { id: "requests", label: "생활 요청", icon: BellRing },
 ];
@@ -39,7 +40,7 @@ export function StaffApp() {
 
   return (
     <AppShell
-      tabs={TABS}
+      tabs={STAFF_TABS}
       active={tab}
       onTab={(t) => {
         setTab(t);
@@ -52,21 +53,37 @@ export function StaffApp() {
       onRetry={() => void repo?.load()}
       ready={ready}
     >
-      {ready && snapshot && repo && (
-        <>
-          {tab === "requests" ? (
-            <StaffRequests snapshot={snapshot} repo={repo} />
-          ) : selected && snapshot.patients.some((p) => p.id === selected) ? (
-            <StaffPatientDetail snapshot={snapshot} patientId={selected} repo={repo} onBack={() => setSelected(null)} />
-          ) : (
-            <PatientList snapshot={snapshot} onOpen={(id) => {
-              setSelected(id);
-              window.scrollTo({ top: 0 });
-            }} />
-          )}
-        </>
-      )}
+      {ready && snapshot && repo && <StaffContent tab={tab} snapshot={snapshot} repo={repo} selected={selected} setSelected={setSelected} />}
     </AppShell>
+  );
+}
+
+/** 의료진 화면 내용 (로그인 버전·공개 데모 공용) */
+export function StaffContent({
+  tab,
+  snapshot,
+  repo,
+  selected,
+  setSelected,
+}: {
+  tab: Tab;
+  snapshot: DbSnapshot;
+  repo: SupabaseRepository;
+  selected: string | null;
+  setSelected: (id: string | null) => void;
+}) {
+  if (tab === "requests") return <StaffRequests snapshot={snapshot} repo={repo} />;
+  if (selected && snapshot.patients.some((p) => p.id === selected)) {
+    return <StaffPatientDetail snapshot={snapshot} patientId={selected} repo={repo} onBack={() => setSelected(null)} />;
+  }
+  return (
+    <PatientList
+      snapshot={snapshot}
+      onOpen={(id) => {
+        setSelected(id);
+        window.scrollTo({ top: 0 });
+      }}
+    />
   );
 }
 
@@ -112,7 +129,7 @@ function PatientRow({ s, onOpen }: { s: PatientSummary; onOpen: () => void }) {
         <p className="text-lg font-bold text-ink">{s.patient.name}</p>
         <StatusPill tone="outline">
           {MODE_LABEL[s.patient.careMode]}
-          {s.admission && s.admission.room !== "미입력" ? ` · ${s.admission.room}호` : ""}
+          {s.admission && s.admission.room !== "미입력" ? ` · ${roomLabel(s.admission.room)}` : ""}
         </StatusPill>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">

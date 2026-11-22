@@ -1,9 +1,10 @@
 "use client";
 
-import { Pencil, Pill, Plus, Trash2 } from "lucide-react";
+import { Pencil, Pill, Plus, ScrollText, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { PageTitle } from "@/components/patient-ui/AppShell";
 import { DrugSearch, type DrugItem } from "@/components/patient-db/DrugSearch";
+import { PrescriptionImport } from "@/components/patient-db/PrescriptionImport";
 import { Alert, Notice, PButton, PCard, SoftSheet, StatusPill, Switch, TextArea, TextField } from "@/components/patient-ui/kit";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import type { MedicationInput, SupabaseRepository } from "@/lib/repository/supabase";
@@ -22,6 +23,7 @@ export function MedicationsView({
   editable,
   title = "내 약",
   sub = "안내받은 약을 한곳에서 차분하게 확인해요.",
+  demo = false,
 }: {
   medications: Medication[];
   patientId: string;
@@ -29,8 +31,12 @@ export function MedicationsView({
   editable: boolean;
   title?: string;
   sub?: string;
+  /** 공개 데모: 예제 처방전 */
+  demo?: boolean;
 }) {
   const [editing, setEditing] = useState<{ id: string | null; input: MedicationInput } | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [imported, setImported] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const action = useAsyncAction();
 
@@ -41,9 +47,22 @@ export function MedicationsView({
         sub={sub}
         action={
           editable && (
-            <PButton size="md" icon={Plus} onClick={() => setEditing({ id: null, input: EMPTY })}>
-              약 추가
-            </PButton>
+            <div className="flex flex-wrap gap-2">
+              <PButton
+                size="md"
+                variant="secondary"
+                icon={ScrollText}
+                onClick={() => {
+                  setImported(null);
+                  setImporting(true);
+                }}
+              >
+                {demo ? "예제 처방전 불러오기" : "처방전 불러오기"}
+              </PButton>
+              <PButton size="md" icon={Plus} onClick={() => setEditing({ id: null, input: EMPTY })}>
+                약 추가
+              </PButton>
+            </div>
           )
         }
       />
@@ -55,6 +74,7 @@ export function MedicationsView({
         </p>
       </PCard>
       <Alert>{action.error}</Alert>
+      {imported !== null && !importing && <Notice>처방전에서 약 {imported}개를 등록했어요.</Notice>}
 
       {medications.length === 0 ? (
         <PCard tone="ivory">
@@ -129,6 +149,18 @@ export function MedicationsView({
         </ul>
       )}
 
+      {editable && repo && (
+        <SoftSheet open={importing} title={demo ? "예제 처방전 불러오기" : "처방전 불러오기"} onClose={() => setImporting(false)}>
+          {importing && (
+            <PrescriptionImport
+              existing={medications}
+              demo={demo}
+              save={(inputs) => repo.addMedications(patientId, inputs)}
+              onDone={(n) => setImported(n)}
+            />
+          )}
+        </SoftSheet>
+      )}
       {editable && repo && (
         <MedicationSheet
           state={editing}
