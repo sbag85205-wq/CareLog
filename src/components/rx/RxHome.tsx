@@ -88,26 +88,22 @@ export function RxHome({
         className="bg-hero relative overflow-hidden rounded-[1.75rem] border border-white/90 px-5 pt-6 pb-6 shadow-soft sm:px-10 sm:pt-10 sm:pb-9"
         aria-labelledby="home-title"
       >
-        <div className="pointer-events-none absolute top-1/2 right-8 hidden -translate-y-1/2 items-end sm:flex lg:right-16" aria-hidden>
-          <CloudMascot className="mr-[-0.75rem] mb-1 h-16 w-16 lg:h-20 lg:w-20" />
-          <NotebookIcon className="h-44 w-44 lg:h-56 lg:w-56" />
-        </div>
-
-        <div className="relative max-w-xl">
+        <div className="md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-6">
+        <div className="min-w-0 max-w-xl">
           <p className="glass inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold text-brand-800">
             <NotebookPen className="h-4 w-4 shrink-0 text-sage" aria-hidden />
             {patient.name} 님의 복약 경험 기록장
           </p>
-          <div className="mt-4 flex items-start justify-between gap-2">
-            <h1 id="home-title" className="text-[1.75rem] leading-[1.22] font-extrabold tracking-tight break-keep text-ink sm:text-[2.6rem]">
-              그때 먹었던 약,
-              <br />
-              <span className="text-brand-700">나한테 어땠더라?</span>
-            </h1>
-            {/* 모바일: 기록 노트 소형 */}
-            <NotebookIcon className="-mt-2 -mr-1 h-20 w-20 shrink-0 sm:hidden" />
+          <h1 id="home-title" className="mt-4 text-[1.75rem] leading-[1.22] font-extrabold tracking-tight break-keep text-ink sm:text-[2.6rem]">
+            그때 먹었던 약,
+            <br />
+            <span className="text-brand-700">나한테 어땠더라?</span>
+          </h1>
+          {/* 모바일: 설명 옆에 기록 노트 + 몽글 (제목·버튼을 가리지 않음) */}
+          <div className="mt-3 flex items-end justify-between gap-3">
+            <p className="min-w-0 text-[1.05rem] break-keep text-ink-soft">{BRAND.sub}</p>
+            <HeroArt compact className="md:hidden" />
           </div>
-          <p className="mt-3 text-[1.05rem] break-keep text-ink-soft">{BRAND.sub}</p>
           <div className="mt-6 grid gap-2.5 sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
             <PButton icon={Plus} onClick={onRegister}>
               약 등록하기
@@ -125,6 +121,9 @@ export function RxHome({
               {lastNote && <span>마지막 기록 {dotDate(noteDate(lastNote))}</span>}
             </p>
           )}
+        </div>
+        {/* PC·태블릿: 오른쪽 칸 (본문과 겹치지 않게 그리드로 배치) */}
+        <HeroArt className="hidden md:flex md:pr-2 lg:pr-8" />
         </div>
       </section>
 
@@ -299,6 +298,25 @@ export function RxHome({
       <SoftSheet open={Boolean(shown)} title="진료 때 보여주기" onClose={() => setShowId(null)}>
         {shown && rx && <VisitShow p={shown} snapshot={rx} questions={questions} repo={repo} />}
       </SoftSheet>
+    </div>
+  );
+}
+
+/**
+ * 홈 Hero 소품: 기록 노트 3D + 기본 몽글 (몽글이 노트 앞, 왼쪽 아래)
+ * 몽글 크기 — 모바일 50~62px (320 / 375 / 430), PC 76~88px
+ */
+function HeroArt({ compact, className }: { compact?: boolean; className?: string }) {
+  return (
+    <div className={`pointer-events-none flex shrink-0 items-end ${className ?? ""}`} aria-hidden>
+      <CloudMascot
+        className={
+          compact
+            ? "relative z-10 -mr-3 mb-0.5 w-[50px] min-[375px]:w-[56px] min-[430px]:w-[62px]"
+            : "relative z-10 -mr-10 mb-2 w-[76px] lg:-mr-14 lg:w-[88px]"
+        }
+      />
+      <NotebookIcon className={compact ? "w-[58px] min-[375px]:w-[66px] min-[430px]:w-[74px]" : "w-40 lg:w-52"} />
     </div>
   );
 }

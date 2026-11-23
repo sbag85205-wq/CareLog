@@ -3,6 +3,7 @@
 import { ChevronRight, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { PageTitle } from "@/components/patient-ui/AppShell";
+import { CloudMascot } from "@/components/patient-ui/illustrations";
 import { ChipGroup, Notice, PButton, PCard } from "@/components/patient-ui/kit";
 import {
   dotDate,
@@ -130,13 +131,17 @@ export function BodyView({
           {group === "all" ? "모든 경험" : TAG_GROUP_LABEL[group]} · {notes.length}건
         </h2>
         {rx.notes.length === 0 ? (
-          <PCard tone="ivory" className="space-y-3">
+          // 불러온 뒤(rx.available)에만 여기 옴 — 로딩·오류는 위에서 따로 안내
+          <PCard tone="ivory" className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+            <CloudMascot variant="notebook" className="w-[64px] shrink-0" />
+            <div className="min-w-0 space-y-3">
             <p className="text-ink-soft">
               아직 남긴 경험이 없어요. 약을 등록하고, 먹어 본 뒤 느낀 점을 남겨 보세요. 지금 먹는 약이 없어도 예전에 먹었던 약을 등록할 수 있어요.
             </p>
             <PButton size="md" onClick={onRegister}>
               약 등록하기
             </PButton>
+            </div>
           </PCard>
         ) : notes.length === 0 ? (
           <PCard tone="ivory">

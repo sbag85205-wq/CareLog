@@ -4,7 +4,7 @@ import { PackagePlus, Search, Star, X } from "lucide-react";
 import { useState } from "react";
 import { MedicationsView } from "@/components/patient-db/MedicationsView";
 import { PageTitle } from "@/components/patient-ui/AppShell";
-import { BottleIcon } from "@/components/patient-ui/illustrations";
+import { BottleIcon, CloudMascot } from "@/components/patient-ui/illustrations";
 import { ChipGroup, cn, Notice, PButton, PCard, Segmented, Switch } from "@/components/patient-ui/kit";
 import type { DbSnapshot, SupabaseRepository } from "@/lib/repository/supabase";
 import { CATEGORIES } from "@/lib/rx/categories";
@@ -105,7 +105,15 @@ export function MedRecordsView({
         }
       />
       {rx && !rx.available && <Notice>{rx.message}</Notice>}
-      <Notice>{notice}</Notice>
+      {notice && (
+        // 약 등록이 실제로 저장된 뒤에만 오는 안내(onSaved) — 기쁜 몽글은 장식, 문구는 그대로 읽힘
+        <div className="flex items-center gap-3 rounded-[0.875rem] border border-mint-200/70 bg-mint-50 px-3 py-2.5">
+          <CloudMascot variant="happy" animate className="w-[56px] shrink-0" />
+          <p aria-live="polite" className="min-w-0 text-sm font-semibold text-mint-700">
+            {notice}
+          </p>
+        </div>
+      )}
 
       {rx?.available && (
         <>
@@ -213,7 +221,8 @@ export function MedRecordsView({
               <h2 className="px-1 text-sm font-bold text-ink-soft">찾은 약 · {rows.length}개</h2>
               {rows.length === 0 ? (
                 <PCard tone="ivory" className="flex flex-col items-center gap-2 text-center">
-                  <BottleIcon className="h-20 w-20" />
+                  {/* 불러온 뒤에만 여기 옴(rx.available). 기록 0개 = 기록장 몽글 / 조건 결과 없음 = 약병 */}
+                  {rx.items.length ? <BottleIcon className="h-20 w-20" /> : <CloudMascot variant="notebook" className="w-[72px]" />}
                   <p className="text-ink-soft">
                     {rx.items.length
                       ? "조건에 맞는 약이 없어요. 조건을 줄여 보세요."

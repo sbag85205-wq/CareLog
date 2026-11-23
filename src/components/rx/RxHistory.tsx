@@ -3,6 +3,7 @@
 import { Star } from "lucide-react";
 import { useState } from "react";
 import { ChipGroup, cn, PCard, Switch } from "@/components/patient-ui/kit";
+import { CloudMascot } from "@/components/patient-ui/illustrations";
 import type { SupabaseRepository } from "@/lib/repository/supabase";
 import {
   filterPrescriptions,
@@ -73,7 +74,9 @@ export function RxHistory({
 
   if (snapshot.prescriptions.length === 0) {
     return (
-      <PCard tone="ivory">
+      <PCard tone="ivory" className="flex flex-col items-center gap-2 text-center">
+        {/* 공유받은 기록 화면(readOnly)에는 마스코트를 두지 않음 */}
+        {!readOnly && <CloudMascot variant="notebook" className="w-[72px]" />}
         <p className="text-ink-soft">
           {readOnly ? "공유받은 기록이 없어요." : "아직 등록한 기록이 없어요. ‘약 등록하기’로 처방전이나 일반약을 등록해 보세요."}
         </p>

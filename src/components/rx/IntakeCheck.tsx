@@ -1,6 +1,7 @@
 "use client";
 
 import { Check } from "lucide-react";
+import { CloudMascot } from "@/components/patient-ui/illustrations";
 import { Alert, cn, PButton, PCard, StatusPill } from "@/components/patient-ui/kit";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { formatKoreanTime } from "@/lib/date";
@@ -21,10 +22,22 @@ export function IntakeCheck({ rx, store, patientId, today }: { rx: RxSnapshot; s
   const slots = active.flatMap(({ item }) => item.scheduleSlots.map((slot) => ({ itemId: item.id, slot })));
   const done = slots.filter((s) => todays.some((x) => x.itemId === s.itemId && x.slot === s.slot)).length;
   const pct = slots.length ? Math.round((done / slots.length) * 100) : 0;
+  const allDone = slots.length > 0 && done === slots.length;
   return (
     <PCard tone="mint" aria-label="오늘 복용 체크" className="space-y-4">
       <div>
-        <h2 className="text-xl font-bold text-ink">오늘 복용 체크</h2>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-xl font-bold text-ink">오늘 복용 체크</h2>
+          {/*
+            사용자가 직접 누른 기록 수만 반영 (캐릭터가 복용 여부를 판단하지 않음)
+            일부 기록: 작은 기본 몽글(정적) · 정해 둔 시간대를 모두 기록: 응원 몽글(짧은 등장)
+          */}
+          {allDone ? (
+            <CloudMascot key="cheer" variant="cheer" animate className="-mt-2 w-[60px] shrink-0" />
+          ) : done > 0 ? (
+            <CloudMascot key="default" className="-mt-1 w-[44px] shrink-0" />
+          ) : null}
+        </div>
         {slots.length > 0 && (
           <>
             <p className="mt-2 text-ink">
@@ -50,6 +63,11 @@ export function IntakeCheck({ rx, store, patientId, today }: { rx: RxSnapshot; s
               </StatusPill>
             </div>
           </>
+        )}
+        {allDone && (
+          <p className="mt-2 text-sm font-semibold text-mint-700" aria-live="polite">
+            오늘 정해 둔 시간대를 모두 기록했어요.
+          </p>
         )}
         <p className="mt-2 text-sm text-ink-soft">먹은 것만 눌러 주세요. 체크하지 않은 칸은 ‘기록 없음’이에요 (안 먹었다는 뜻이 아니에요).</p>
       </div>

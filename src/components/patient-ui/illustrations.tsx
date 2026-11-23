@@ -44,12 +44,34 @@ export function LogoMark({ className }: Props) {
   );
 }
 
-/** 몽글 v2 — 구름 마스코트 (Hero 옆 소형, 빈 상태·완료) */
-export function CloudMascot({ className }: Props) {
-  const id = useIds("body", "shine", "shadow");
+export type MascotVariant = "default" | "happy" | "cheer" | "notebook";
+
+/**
+ * 몽글 — CareLog 대표 마스코트 (구름). 몸·윤곽선·볼터치·질감은 모든 변형이 같고, 표정·팔·소품만 다릅니다.
+ * - default: 편안하게 웃는 기본 (홈 Hero)
+ * - happy: 활짝 웃음 + 작은 체크 (약 등록이 실제로 저장된 뒤)
+ * - cheer: 반짝이 + 두 팔 (오늘 정해 둔 시간대를 모두 기록했을 때)
+ * - notebook: 작은 노트를 든 기록장 (기록이 하나도 없을 때)
+ * 규칙: 장식 전용(aria-hidden) · 인쇄 제외(no-print) · 화면당 큰 마스코트 1개 · 불편 경험·주의사항·공유 권한·PDF에는 쓰지 않음.
+ * animate: 완료 상태에서만 짧게 등장 (prefers-reduced-motion 이면 효과 없음 — globals.css .mascot-pop)
+ */
+export function CloudMascot({ className, variant = "default", animate = false }: Props & { variant?: MascotVariant; animate?: boolean }) {
+  const id = useIds("body", "shine", "shadow", "note");
+  const open = variant === "happy" || variant === "cheer";
   return (
-    <svg viewBox="0 0 120 110" className={cn("no-print", className)} aria-hidden fill="none">
+    <svg
+      viewBox="0 0 120 110"
+      className={cn("no-print overflow-visible", animate && "mascot-pop", className)}
+      aria-hidden
+      focusable="false"
+      fill="none"
+      data-mascot={variant}
+    >
       <defs>
+        <linearGradient id={id.note} x1="0" y1="0" x2="0" y2="1">
+          <stop stopColor="#ece7fd" />
+          <stop offset="1" stopColor="#d6ccf7" />
+        </linearGradient>
         <radialGradient id={id.body} cx="40%" cy="30%" r="75%">
           <stop stopColor="#ffffff" />
           <stop offset=".65" stopColor="#fdf9f1" />
@@ -66,7 +88,12 @@ export function CloudMascot({ className }: Props) {
       </defs>
       <ellipse cx="60" cy="101" rx="34" ry="5" fill={`url(#${id.shadow})`} />
       <path d="M57 22c0-6 4-10 10-10" stroke="#a6cdea" strokeWidth="3.2" strokeLinecap="round" />
-      <path d="M14 64l-4 9M106 64l4 9" stroke="#a6cdea" strokeWidth="3.2" strokeLinecap="round" />
+      {/* 팔: 기본·체크는 아래로, 응원은 위로, 노트는 노트를 잡음 */}
+      {variant === "cheer" ? (
+        <path d="M15 58l-8-11M105 58l8-11" stroke="#a6cdea" strokeWidth="3.2" strokeLinecap="round" />
+      ) : variant !== "notebook" ? (
+        <path d="M14 64l-4 9M106 64l4 9" stroke="#a6cdea" strokeWidth="3.2" strokeLinecap="round" />
+      ) : null}
       <path
         d="M30 86h60c11 0 19-8 19-18 0-8-5-14-12-17 1-11-7-20-18-20-3 0-6 1-8 2-4-7-11-11-19-10-9 1-16 8-17 17-9 1-16 9-16 18 0 1 0 3 1 4-4 3-7 8-7 13 0 6 5 11 17 11Z"
         fill={`url(#${id.body})`}
@@ -81,9 +108,41 @@ export function CloudMascot({ className }: Props) {
       <circle cx="72" cy="58" r="4.2" fill="#28343d" />
       <circle cx="49.4" cy="56.6" r="1.3" fill="#fff" />
       <circle cx="73.4" cy="56.6" r="1.3" fill="#fff" />
-      <path d="M55.5 66c2.6 2.4 6.4 2.4 9 0" stroke="#28343d" strokeWidth="2.6" strokeLinecap="round" />
+      {open ? (
+        <>
+          <path d="M54 64.2h12c0 4.2-2.7 6.8-6 6.8s-6-2.6-6-6.8Z" fill="#28343d" />
+          <path d="M56.6 69.2c1-1.1 2.1-1.6 3.4-1.6s2.4.5 3.4 1.6c-1 .9-2.1 1.3-3.4 1.3s-2.4-.4-3.4-1.3Z" fill="#f3a296" />
+        </>
+      ) : (
+        <path d="M55.5 66c2.6 2.4 6.4 2.4 9 0" stroke="#28343d" strokeWidth="2.6" strokeLinecap="round" />
+      )}
       <ellipse cx="39" cy="66" rx="6" ry="3.6" fill="#f7b7a8" opacity=".55" />
       <ellipse cx="81" cy="66" rx="6" ry="3.6" fill="#f7b7a8" opacity=".55" />
+
+      {variant === "notebook" && (
+        <g>
+          <rect x="43" y="71" width="34" height="23" rx="5" fill={`url(#${id.note})`} stroke="#b4a7ef" strokeWidth="2" />
+          <rect x="49" y="78" width="22" height="2.6" rx="1.3" fill="#8f80dc" opacity=".55" />
+          <rect x="49" y="84" width="15" height="2.6" rx="1.3" fill="#8f80dc" opacity=".55" />
+          {/* 노트를 잡은 손 */}
+          <ellipse cx="42" cy="82" rx="5" ry="4.2" fill="#f6eee0" stroke="#a6cdea" strokeWidth="2.6" />
+          <ellipse cx="78" cy="82" rx="5" ry="4.2" fill="#f6eee0" stroke="#a6cdea" strokeWidth="2.6" />
+        </g>
+      )}
+      {variant === "happy" && (
+        <g>
+          <circle cx="101" cy="29" r="11" fill="#76ac8e" stroke="#fff" strokeWidth="3" />
+          <path d="M95.8 29.3l3.6 3.6 6.6-7" stroke="#fff" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round" />
+        </g>
+      )}
+      {variant === "cheer" && (
+        <g>
+          <path d="M18 12l2.2 5.8L26 20l-5.8 2.2L18 28l-2.2-5.8L10 20l5.8-2.2Z" fill="#f6cf6c" />
+          <path d="M104 6l1.6 4.4 4.4 1.6-4.4 1.6-1.6 4.4-1.6-4.4-4.4-1.6 4.4-1.6Z" fill="#b9aef2" />
+          <circle cx="112" cy="26" r="2.2" fill="#a6cdea" />
+          <circle cx="8" cy="34" r="1.8" fill="#b9aef2" />
+        </g>
+      )}
     </svg>
   );
 }
