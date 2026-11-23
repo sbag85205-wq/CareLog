@@ -32,6 +32,7 @@ import {
   userSession,
   type VMember,
   type VPatient,
+  openShareManagement,
 } from "./support";
 
 let AD: VMember, S: VMember, G: VMember;
@@ -187,7 +188,7 @@ test("3. 이전 방식 환자 전환: 아이디 지정 → 새 아이디 + 기�
   await menu(page, "진료 준비").click();
   await expect(page.getByRole("list", { name: "진료 질문 목록" }).getByText(LEGACY_Q)).toBeVisible();
   await menu(page, "함께 보기").click();
-  await page.getByText("사람 초대 · 연결 관리").click(); // 초대·공유 범위는 접힌 영역 안
+  await openShareManagement(page); // 초대·공유 범위는 접힌 영역 안
   await expect(page.getByText(G.email).first()).toBeVisible();
   await page.context().close();
 

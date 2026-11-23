@@ -27,7 +27,7 @@ import { medicationsOf } from "@/lib/selectors";
 import type { Patient } from "@/types";
 import { ItemDetail } from "./ItemDetail";
 import { RxHistory } from "./RxHistory";
-import { CategoryPills, KindPill, TagPills } from "./RxParts";
+import { CategoryPills, KindPill, TagPills, VerifyPill } from "./RxParts";
 
 export type RecordsView = "items" | "records";
 export interface RecordsNav {
@@ -312,22 +312,21 @@ export function MedRecordsView({
         </>
       )}
 
-      {(meds.length > 0 || !rx?.available) && (
-        <details className="rounded-[1.5rem] bg-ivory-deep px-4 py-3" open={!rx?.available}>
-          <summary className="cursor-pointer font-semibold text-ink-soft">예전 방식으로 적어 둔 약 ({meds.length}개)</summary>
-          <div className="mt-3">
-            <MedicationsView
-              medications={meds}
-              patientId={patient.id}
-              repo={repo}
-              editable
-              embedded
-              title="직접 추가한 약"
-              sub="처방전 없이 따로 적어 둔 약이에요."
-            />
-          </div>
-        </details>
-      )}
+      {/* 예전 방식 약 목록(보호자 공개용 약 포함)은 항상 열 수 있게 — 처음 쓰는 사람도 '약 직접 추가' 가능 */}
+      <details className="rounded-[1.5rem] bg-ivory-deep px-4 py-3" open={!rx?.available}>
+        <summary className="cursor-pointer font-semibold text-ink-soft">예전 방식으로 적어 둔 약 ({meds.length}개)</summary>
+        <div className="mt-3">
+          <MedicationsView
+            medications={meds}
+            patientId={patient.id}
+            repo={repo}
+            editable
+            embedded
+            title="직접 추가한 약"
+            sub="처방전 없이 따로 적어 둔 약이에요."
+          />
+        </div>
+      </details>
     </div>
   );
 }
@@ -344,6 +343,7 @@ function ItemCard({ row: { item: i, prescription: p }, rx, store, onOpen }: { ro
       >
         <span className="flex flex-wrap items-center gap-2">
           <KindPill p={p} />
+          <VerifyPill item={i} />
           <span className="text-sm text-ink-soft">
             {slashDate(p.prescribedOn)}
             {p.kind === "prescription" && p.department && ` · ${p.department}`}

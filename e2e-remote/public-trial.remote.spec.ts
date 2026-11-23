@@ -189,6 +189,7 @@ test("3. 관리자 권한: 관리자도 환자 기록을 직접 못 봄, 환자�
 });
 
 test("4. 체험 계정 로그인: 오타로 잠기지 않음, 한도는 IP별(다른 IP는 영향 없음), 관리자 재설정으로 복구", async ({ page, baseURL }) => {
+  test.skip(Number(process.env.CARELOG_LOGIN_RATE_LIMIT) > 20, "기본 설정(IP당 20회)에서만 — 완화 설정은 8번 테스트에서 확인");
   const H = (ip: string) => ({ Origin: baseURL!, "x-forwarded-for": ip });
   const login = (password: string, ip: string) => page.request.post("/api/patient-auth/login", { data: { loginId: A.loginId, password }, headers: H(ip) });
   // 다른 방문자가 6번 틀려도 (같은 IP) 맞는 비밀번호로는 바로 로그인됨 — 계정 잠금 없음
@@ -293,4 +294,38 @@ test("6. 화면(실제 DB): 로그인 → 기록·경험 → 함께 보기 → �
   // 새로고침 후에도 저장된 경험이 남아 있음 (실제 DB)
   const a = await userSession(A.email, A.password);
   expect(((await a.from("prescription_notes").select("memo")).data ?? []).some((x) => x.memo.includes("졸렸어"))).toBe(true);
+});
+
+test("7. 약 이름 직접 입력(실제 DB, 식약처 검색 실패 경로): 이름만으로 등록 → '직접 입력' 표시, 품목기준코드·분류 지어내지 않음", async ({ page }) => {
+  await patientLogin(page, A);
+  await page.getByRole("button", { name: "약 등록하기" }).first().click();
+  await page
+    .getByRole("dialog", { name: "약 등록하기" })
+    .getByRole("button", { name: /^약 이름 직접 검색/ })
+    .click();
+  const dlg = page.getByRole("dialog");
+  await dlg.getByLabel("제품명 검색어").fill("검증용직접입력약");
+  await dlg.getByRole("button", { name: "식약처 제품 정보에서 찾기" }).click();
+  const line = dlg.getByLabel("읽은 줄: 검증용직접입력약");
+  await expect(line.getByText("확인 필요")).toBeVisible({ timeout: 30_000 }); // 검색 실패 또는 결과 없음
+  await line.getByRole("button", { name: "이름만 직접 입력해 등록" }).click();
+  await line.getByLabel("직접 입력할 약 이름").fill("(가상) 검증 직접 입력약");
+  await dlg.getByRole("button", { name: "확인한 제품 1개 등록" }).click();
+  await expect(page.getByLabel("제품: (가상) 검증 직접 입력약").getByText("직접 입력", { exact: true })).toBeVisible();
+  const a = await userSession(A.email, A.password);
+  const row = (
+    await a
+      .from("prescription_items")
+      .select("name, external_item_seq, categories, category_source, ingredients, active")
+      .eq("name", "(가상) 검증 직접 입력약")
+      .single()
+  ).data;
+  expect(row).toEqual({
+    name: "(가상) 검증 직접 입력약",
+    external_item_seq: null,
+    categories: ["unclassified"],
+    category_source: "none",
+    ingredients: "",
+    active: false,
+  });
 });

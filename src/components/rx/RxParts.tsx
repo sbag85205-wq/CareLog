@@ -208,3 +208,16 @@ export function QuestionItem({ q, repo, readOnly }: { q: VisitQuestion; repo?: S
     </div>
   );
 }
+
+/** 식약처 제품으로 확인한 약(품목기준코드 있음) / 직접 입력한 약 구분 */
+export function VerifyPill({ item }: { item: Pick<RxItem, "externalItemSeq"> }) {
+  return item.externalItemSeq ? (
+    <StatusPill tone="mint" className="!px-2.5 !py-0.5 !text-xs">
+      식약처 확인
+    </StatusPill>
+  ) : (
+    <StatusPill tone="dashed" className="!px-2.5 !py-0.5 !text-xs">
+      직접 입력
+    </StatusPill>
+  );
+}

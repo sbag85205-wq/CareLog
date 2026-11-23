@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { isValidLoginId, LOGIN_MESSAGES, loginIdToEmail, normalizeLoginId } from "@/lib/patient-auth/login-id";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { clientKey, isSameOrigin, json, limiters, readJson, str } from "@/server/patient-auth/http";
+import { clientKey, isSameOrigin, json, loginGuards, readJson, str } from "@/server/patient-auth/http";
 import { withMinDuration } from "@/server/patient-auth/rate-limit";
 import { createSessionClient } from "@/server/supabase/session";
 import { getViewer } from "@/server/supabase/viewer";
@@ -19,7 +19,9 @@ export async function POST(req: NextRequest) {
   if (!isSameOrigin(req)) return json({ ok: false, message: FAILED }, 403);
 
   return withMinDuration(600, async () => {
-    if (!limiters.login.hit(clientKey(req))) {
+    const ip = clientKey(req);
+    const guard = loginGuards.patient;
+    if (!guard.allowRequest(ip)) {
       console.warn("[patient-auth] login 거부: rate_limited");
       return json({ ok: false, message: FAILED }, 429);
     }
@@ -27,10 +29,18 @@ export async function POST(req: NextRequest) {
     const loginId = normalizeLoginId(str(body?.loginId, 40) ?? "");
     const password = str(body?.password, 200);
     if (!isValidLoginId(loginId) || !password) return json({ ok: false, message: FAILED }, 401);
+    // 계정별 실패 제한 (공개 체험 사이트에서 IP 한도를 완화했을 때만 켜짐)
+    if (guard.accountBlocked(ip, loginId)) {
+      console.warn("[patient-auth] login 거부: account_rate_limited");
+      return json({ ok: false, message: FAILED }, 429);
+    }
 
     const client = await createSessionClient();
     const { error } = await client.auth.signInWithPassword({ email: loginIdToEmail(loginId), password });
-    if (error) return json({ ok: false, message: FAILED }, 401);
+    if (error) {
+      guard.recordFailure(ip, loginId);
+      return json({ ok: false, message: FAILED }, 401);
+    }
 
     const viewer = await getViewer(client);
     if (!viewer || viewer.role !== "patient" || viewer.disabled) {

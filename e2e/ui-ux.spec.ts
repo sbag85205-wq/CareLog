@@ -3,8 +3,10 @@
  * 홈 한눈에·복용 체크 접기 · 약 검색 상세 필터 · 내 몸의 반응 약별/타임라인 · 진료 준비 핵심·접기
  * (함께 보기 단계별 흐름은 demo-regression 의 데모 E 에서 확인)
  */
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { expectNoHorizontalOverflow, menu, openApp, trackConsoleErrors } from "./helpers";
+
+const dialog = (page: Page) => page.getByRole("dialog");
 
 test("홈: 오늘 한눈에 · 복용 중 더 보기 · 복용 체크 접기(새로고침 후에도 기억)", async ({ page }) => {
   const console = trackConsoleErrors(page);
@@ -138,5 +140,54 @@ test("[PC] 개선한 화면들 가로 넘침 없음 · 홈 한눈에 4칸", asyn
     await menu(page, m).click();
     await expectNoHorizontalOverflow(page);
   }
+  console.expectNone();
+});
+
+test("약 이름 직접 입력: 식약처에 없는 약도 이름만으로 등록, '직접 입력'으로 구분 (식약처 확인 약과 다름)", async ({ page }) => {
+  const console = trackConsoleErrors(page);
+  await openApp(page);
+  await page.getByRole("button", { name: "약 등록하기" }).first().click();
+  await page
+    .getByRole("dialog", { name: "약 등록하기" })
+    .getByRole("button", { name: /^약 이름 직접 검색/ })
+    .click();
+  const dlg = page.getByRole("dialog");
+  await dlg.getByLabel("제품명 검색어").fill("없는가상약");
+  await dlg.getByRole("button", { name: "식약처 제품 정보에서 찾기" }).click();
+  const line = dlg.getByLabel("읽은 줄: 없는가상약");
+  await expect(line.getByText("식약처 제품 정보에서 이 이름을 찾지 못했어요. 제품을 추측하지 않아요.")).toBeVisible();
+  const save = dlg.getByRole("button", { name: /확인한 제품|제품을 골라/ });
+  await expect(save).toBeDisabled();
+  await line.getByRole("button", { name: "이름만 직접 입력해 등록" }).click();
+  await expect(line.getByLabel("직접 입력할 약 이름")).toHaveValue("없는가상약");
+  await line.getByLabel("직접 입력할 약 이름").fill("");
+  await expect(dlg.getByText("직접 입력할 약 이름을 적어 주세요.")).toBeVisible();
+  await expect(save).toBeDisabled();
+  await line.getByLabel("직접 입력할 약 이름").fill("(가상) 집에 있던 연고");
+  await line.getByLabel("직접 입력할 함량").fill("10g");
+  const confirm = dlg.getByLabel("등록할 제품: (가상) 집에 있던 연고");
+  await expect(confirm.getByText("직접 입력 · 식약처 확인 안 됨")).toBeVisible();
+  await expect(confirm.getByText("미분류 · 확인 필요")).toBeVisible();
+  await expect(save).toHaveText("확인한 제품 1개 등록");
+  await save.click();
+  await expect(dialog(page)).toHaveCount(0);
+
+  const card = page.getByLabel("제품: (가상) 집에 있던 연고");
+  await expect(card.getByText("직접 입력", { exact: true })).toBeVisible();
+  await expect(card.getByText("미분류 · 확인 필요")).toBeVisible();
+  await expect(page.getByLabel("기록 상세").getByText(/직접 입력으로 등록/)).toBeVisible();
+  // 식약처 후보가 있을 때도 '목록에 없어요 · 이름만 직접 입력'을 고를 수 있음
+  await page.getByRole("button", { name: "약 등록하기" }).first().click();
+  await page
+    .getByRole("dialog", { name: "약 등록하기" })
+    .getByRole("button", { name: /^약 이름 직접 검색/ })
+    .click();
+  await dialog(page).getByLabel("제품명 검색어").fill("가상소화정");
+  await dialog(page).getByRole("button", { name: "식약처 제품 정보에서 찾기" }).click();
+  await dialog(page).getByRole("radio", { name: "목록에 없어요 · 이름만 직접 입력" }).check();
+  await expect(dialog(page).getByLabel("직접 입력할 약 이름")).toHaveValue("가상소화정");
+  await dialog(page).getByRole("radio", { name: "가상소화정 · 가상제약(주)" }).check();
+  await dialog(page).getByRole("button", { name: "확인한 제품 1개 등록" }).click();
+  await expect(page.getByLabel("제품: 가상소화정").getByText("식약처 확인")).toBeVisible();
   console.expectNone();
 });

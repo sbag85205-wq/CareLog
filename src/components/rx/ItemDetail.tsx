@@ -20,7 +20,7 @@ import {
 } from "@/lib/rx/model";
 import type { RxStore } from "@/lib/rx/store";
 import { NoteEditor } from "./NoteEditor";
-import { KindPill, SourceNote, SOURCE_TEXT, TagPills } from "./RxParts";
+import { KindPill, SOURCE_TEXT, SourceNote, TagPills, VerifyPill } from "./RxParts";
 
 const toggle = <T,>(list: T[], t: T) => (list.includes(t) ? list.filter((x) => x !== t) : [...list, t]);
 
@@ -86,6 +86,10 @@ export function ItemDetail({
           <dd className="text-ink">{item.drugClass === "otc" ? "일반의약품" : item.drugClass === "rx" ? "전문의약품" : "확인 안 됨"}</dd>
           <dt className="font-bold text-ink-soft">식약처 약효 분류</dt>
           <dd className="text-ink">{item.mfdsClass || "확인 안 됨"}</dd>
+          <dt className="font-bold text-ink-soft">확인 상태</dt>
+          <dd>
+            <VerifyPill item={item} />
+          </dd>
           <dt className="font-bold text-ink-soft">제품 식별</dt>
           <dd className="text-ink">
             {item.externalItemSeq

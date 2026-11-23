@@ -26,6 +26,8 @@ import {
   expectTodayCondition,
   openLegacyMeds,
   recordCondition,
+  openConditionRecords,
+  openShareManagement,
 } from "./support";
 
 let A: VPatient, B: VPatient;
@@ -112,7 +114,7 @@ test("1. 환자 A: 지금 복용 중 홈 → 오늘 기록 → 내 약 → 진�
 
   // 보호자 공유: G1(건강기록·약 정보), G3(건강기록) — 식사·생활 요청 항목은 새 버전에서 숨김
   await menu(page, "함께 보기").click();
-  await page.getByText("사람 초대 · 연결 관리").click(); // 초대·공유 범위는 접힌 영역 안
+  await openShareManagement(page); // 초대·공유 범위는 접힌 영역 안
   for (const [g, extra] of [
     [G1, ["약 정보"]],
     [G3, []],
@@ -132,9 +134,7 @@ test("1. 환자 A: 지금 복용 중 홈 → 오늘 기록 → 내 약 → 진�
   await expectNoHorizontalOverflow(page);
 
   // 건강 기록
-  await menu(page, "진료 준비").click();
-  await page.getByRole("button", { name: /^최근 2주 컨디션 요약/ }).click(); // 접힌 섹션 펼치기
-  await page.getByRole("button", { name: "컨디션 기록 열기" }).click(); // 건강 기록은 메뉴에서 빠지고 진료 준비에서 열기
+  await openConditionRecords(page); // 건강 기록은 메뉴에서 빠지고 진료 준비 → 최근 2주 컨디션 요약에서 (이미 펼쳐져 있으면 그대로)
   await expect(page.getByRole("heading", { name: "건강 기록" })).toBeVisible();
   await shot(page, "m-patient-records");
   await expectNoHorizontalOverflow(page);
@@ -203,14 +203,14 @@ test("4. 환자 A 재로그인: 기록·약·질문 유지, 검토 메모는 안
   await expect(page.getByLabel(`복용 중: ${MED_PUBLIC}`)).toBeVisible(); // 직접 추가한 약도 홈에
   await expectTodayCondition(page, 4);
   await expect(page.getByText("(가상) 내부 검토 메모")).toHaveCount(0);
-  await menu(page, "나의 약 기록").click();
+  await openLegacyMeds(page); // 예전 방식 약은 접힌 영역 안
   await expect(page.getByRole("region", { name: MED_PUBLIC })).toBeVisible();
   await expect(page.getByRole("region", { name: MED_PRIVATE }).getByText("1회 1정 · 저녁 식후")).toBeVisible();
   await menu(page, "진료 준비").click();
-  await expect(page.getByText(QUESTION)).toBeVisible();
+  await expect(page.getByRole("list", { name: "진료 질문 목록" }).getByText(QUESTION)).toBeVisible();
 
   await menu(page, "함께 보기").click();
-  await page.getByText("사람 초대 · 연결 관리").click(); // 초대·공유 범위는 접힌 영역 안
+  await openShareManagement(page); // 초대·공유 범위는 접힌 영역 안
   const g3 = page.getByRole("region", { name: `${G3.email} 공유 설정` });
   await g3.getByRole("button", { name: "공유 철회" }).click();
   await g3.getByRole("button", { name: "공유 멈추기" }).click();
@@ -285,7 +285,7 @@ test("7. 환자 B: 아이디 로그인 후 자기 기록만, A·간호사1 화�
   const page = await newPage(browser);
   await patientLogin(page, B);
   await expect(page.getByText(A.name)).toHaveCount(0);
-  await menu(page, "나의 약 기록").click();
+  await openLegacyMeds(page); // 예전 방식 약은 접힌 영역 안
   await expect(page.getByText("처방전 없이 따로 적어 둔 약이 없어요.")).toBeVisible();
   const sb = await userSession(B.email, B.password);
   for (const t of ["health_records", "medications", "life_requests", "visit_questions", "access_grants"]) {

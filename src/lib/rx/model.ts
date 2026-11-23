@@ -503,6 +503,14 @@ export function experienceSentence(p: Prescription, n: RxNote, itemName?: string
   return parts.join(" ").replace(/\s+/g, " ").trim();
 }
 
+/** 방법·수단 조사: 받침 없음·ㄹ받침 → '로', 그 밖의 받침 → '으로' (처방전으로 · 일반약 상자로 · 직접 입력으로) */
+export function euro(word: string): string {
+  const code = word.trim().slice(-1).charCodeAt(0) - 0xac00;
+  if (code < 0 || code > 11171) return "로";
+  const fin = code % 28;
+  return fin === 0 || fin === 8 ? "로" : "으로";
+}
+
 /** 받침에 따라 을/를 등 (한글이 아니면 뒤 형태) */
 export function josa(word: string, withFinal: string, withoutFinal: string): string {
   const ch = word.trim().slice(-1);

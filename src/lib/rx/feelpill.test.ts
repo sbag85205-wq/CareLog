@@ -202,3 +202,17 @@ describe("데모 저장소", () => {
     expect(st.getSnapshot()!.intakes.map((i) => i.slot)).toEqual(["morning", "prn", "prn"]);
   });
 });
+
+describe("조사 '으로/로'", () => {
+  it("받침·ㄹ받침 구분", async () => {
+    const { euro } = await import("./model");
+    expect(["처방전", "일반약 상자", "약국 영수증", "직접 검색", "직접 입력", "서울"].map((w) => w + euro(w))).toEqual([
+      "처방전으로",
+      "일반약 상자로",
+      "약국 영수증으로",
+      "직접 검색으로",
+      "직접 입력으로",
+      "서울로",
+    ]);
+  });
+});

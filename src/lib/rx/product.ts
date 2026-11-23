@@ -29,3 +29,28 @@ export function productToItem(d: DrugItem): RxItemInput {
     active: false,
   };
 }
+
+/**
+ * 식약처에서 찾지 못했거나 검색할 수 없을 때 — 사용자가 적은 이름(·함량)만으로 등록
+ * 품목기준코드·성분·분류를 지어내지 않음: 제품 식별 없음(다른 기록과 합치지 않음), 약 종류는 '미분류 · 확인 필요'
+ */
+export function manualToItem(name: string, strength = ""): RxItemInput {
+  return {
+    name: name.trim().slice(0, 100),
+    strength: strength.trim().slice(0, 50),
+    ingredients: "",
+    company: "",
+    drugClass: "",
+    mfdsClass: "",
+    categories: ["unclassified"],
+    categorySource: "none",
+    dosage: "",
+    frequency: "",
+    timing: "",
+    duration: "",
+    cautionRx: "",
+    cautionMfds: "",
+    externalItemSeq: undefined,
+    active: false,
+  };
+}

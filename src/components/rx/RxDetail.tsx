@@ -7,6 +7,7 @@ import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { formatLongKoreanDate } from "@/lib/date";
 import type { SupabaseRepository } from "@/lib/repository/supabase";
 import {
+  euro,
   DEPARTMENTS,
   dotDate,
   experienceSentence,
@@ -22,7 +23,7 @@ import {
 import type { RxStore } from "@/lib/rx/store";
 import type { VisitQuestion } from "@/types";
 import { NoteCard, NoteEditor } from "./NoteEditor";
-import { CategoryPills, howToTake, KindPill, QuestionItem, SourceNote, SOURCE_TEXT, TagPills } from "./RxParts";
+import { CategoryPills, howToTake, KindPill, QuestionItem, SOURCE_TEXT, SourceNote, TagPills, VerifyPill } from "./RxParts";
 
 const dateTitle = (p: Prescription) => `${formatLongKoreanDate(p.prescribedOn).replace(/ \S+요일$/, "")} ${p.kind === "otc" ? "등록" : "처방"}`;
 
@@ -79,7 +80,8 @@ export function RxDetail({
               {!otc && <StatusPill tone="outline">{p.department || "진료과 미입력"}</StatusPill>}
               {p.clinic && <span className="text-sm">{p.clinic}</span>}
               <span className="text-sm">
-                {otc ? "제품" : "약"} {items.length}개 · {SOURCE_LABEL[p.source]}로 등록
+                {otc ? "제품" : "약"} {items.length}개 · {SOURCE_LABEL[p.source]}
+                {euro(SOURCE_LABEL[p.source])} 등록
               </span>
             </p>
           </div>
@@ -141,7 +143,10 @@ export function RxDetail({
               <p className="mt-0.5 text-sm text-ink-soft">{[i.ingredients && `성분 ${i.ingredients}`, i.company].filter(Boolean).join(" · ")}</p>
             )}
             <div className="mt-1.5">
-              <CategoryPills item={i} />
+              <span className="flex flex-wrap items-center gap-1">
+                <VerifyPill item={i} />
+                <CategoryPills item={i} />
+              </span>
             </div>
             {(!otc || i.dosage || i.frequency) && <p className="mt-1.5 text-sm font-semibold text-brand-800">{howToTake(i)}</p>}
             {!otc && <p className="text-sm text-ink-soft">기간: {i.duration || "미입력"}</p>}

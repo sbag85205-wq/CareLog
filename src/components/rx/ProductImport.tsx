@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, CheckCircle2, FileUp, Receipt, Search } from "lucide-react";
+import { Camera, CheckCircle2, FileUp, PencilLine, Receipt, Search } from "lucide-react";
 import { useRef, useState } from "react";
 import { Alert, cn, Notice, PButton, PCard, StatusPill } from "@/components/patient-ui/kit";
 import { EXAMPLE_BOX, EXAMPLE_RECEIPT, exampleBoxText, exampleReceiptText } from "@/lib/demo/example-otc";
@@ -8,7 +8,7 @@ import { useDrugSearch, type DrugItem } from "@/lib/drug-search-client";
 import { extractBoxNames, extractReceiptLines } from "@/lib/prescription/product-text";
 import type { ReadProgress } from "@/lib/prescription/read-file";
 import { classify, categoryLabel, CATEGORY_SOURCE_LABEL, mfdsClassText } from "@/lib/rx/categories";
-import { productToItem } from "@/lib/rx/product";
+import { manualToItem, productToItem } from "@/lib/rx/product";
 import type { RecordSource, RxItemInput } from "@/lib/rx/model";
 
 export type ProductMode = "box" | "receipt" | "search";
@@ -38,10 +38,17 @@ interface Line {
   query: string;
   status: "searching" | "found" | "none" | "failed";
   candidates: DrugItem[];
-  /** 고른 품목기준코드 · null = 이 줄은 등록 안 함 · undefined = 아직 안 고름 */
+  /** 고른 품목기준코드 · MANUAL = 이름만 직접 입력 · null = 이 줄은 등록 안 함 · undefined = 아직 안 고름 */
   pick: string | null | undefined;
+  /** 직접 입력할 때 이름·함량 (식약처 확인 안 됨) */
+  manualName: string;
+  manualStrength: string;
   message?: string;
 }
+
+/** 식약처 후보 대신 사용자가 이름을 직접 적어 등록 */
+const MANUAL = "__manual__";
+type Chosen = { key: string; kind: "mfds"; d: DrugItem } | { key: string; kind: "manual"; name: string; strength: string };
 
 const MODE_TITLE: Record<ProductMode, string> = { box: "일반약 상자", receipt: "약국 영수증", search: "약 이름 직접 검색" };
 
@@ -111,13 +118,26 @@ export function ProductImport({
         status: names.length ? "searching" : "none",
         candidates: [],
         pick: undefined,
+        manualName: names[0] ?? "",
+        manualStrength: "",
       };
       setLines([line]);
       setStage("pick");
       if (names.length) await lookup("box", names);
     } else {
       const rl = extractReceiptLines(text);
-      setLines(rl.map((l, i) => ({ key: `r${i}`, raw: l.raw, query: l.name, status: "searching", candidates: [], pick: undefined })));
+      setLines(
+        rl.map((l, i) => ({
+          key: `r${i}`,
+          raw: l.raw,
+          query: l.name,
+          status: "searching",
+          candidates: [],
+          pick: undefined,
+          manualName: l.name,
+          manualStrength: "",
+        })),
+      );
       if (isDemo) setShop(EXAMPLE_RECEIPT.shop);
       setStage("pick");
       for (const [i, l] of rl.entries()) await lookup(`r${i}`, [l.name]);
@@ -130,7 +150,7 @@ export function ProductImport({
     setError(null);
     setQ(s);
     requestIdRef.current ??= newRequestId();
-    setLines([{ key: "search", raw: s, query: s, status: "searching", candidates: [], pick: undefined }]);
+    setLines([{ key: "search", raw: s, query: s, status: "searching", candidates: [], pick: undefined, manualName: s, manualStrength: "" }]);
     setStage("pick");
     await lookup("search", [s]);
   }
@@ -153,22 +173,28 @@ export function ProductImport({
     }
   }
 
-  const chosen = lines.flatMap((l) => (l.pick ? [l.candidates.find((c) => c.itemSeq === l.pick)!] : [])).filter(Boolean);
+  const chosen: Chosen[] = lines.flatMap((l): Chosen[] => {
+    if (l.pick === MANUAL) return l.manualName.trim() ? [{ key: l.key, kind: "manual", name: l.manualName.trim(), strength: l.manualStrength.trim() }] : [];
+    const d = l.pick ? l.candidates.find((c) => c.itemSeq === l.pick) : undefined;
+    return d ? [{ key: l.key, kind: "mfds", d }] : [];
+  });
   const undecided = lines.filter((l) => l.status === "found" && l.pick === undefined);
+  const manualMissing = lines.filter((l) => l.pick === MANUAL && !l.manualName.trim());
   const searching = lines.some((l) => l.status === "searching");
 
   async function register() {
-    if (savingRef.current || chosen.length === 0 || searching || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+    if (savingRef.current || chosen.length === 0 || searching || manualMissing.length > 0 || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
     savingRef.current = true;
     setStage("saving");
     setError(null);
     try {
       await save({
         requestId: requestIdRef.current ?? (requestIdRef.current = newRequestId()),
-        source: mode === "box" ? "otc_box" : mode === "receipt" ? "receipt" : "search",
+        // 모두 직접 입력이면 '직접 입력', 하나라도 식약처 제품이면 원래 방법
+        source: chosen.every((c) => c.kind === "manual") ? "manual" : mode === "box" ? "otc_box" : mode === "receipt" ? "receipt" : "search",
         date,
         shop: shop.trim().slice(0, 60),
-        items: chosen.map((d) => ({ ...productToItem(d), active: taking })),
+        items: chosen.map((c) => ({ ...(c.kind === "mfds" ? productToItem(c.d) : manualToItem(c.name, c.strength)), active: taking })),
       });
       setStage("done");
       onDone(chosen.length);
@@ -320,7 +346,13 @@ export function ProductImport({
       <ul className="space-y-3" aria-label="제품 후보">
         {lines.map((l) => (
           <li key={l.key}>
-            <LineCard line={l} onPick={(pick) => update(l.key, { pick })} multi={mode === "receipt"} onSwitchToSearch={onSwitchToSearch} />
+            <LineCard
+              line={l}
+              onPick={(pick) => update(l.key, { pick })}
+              onManual={(patch) => update(l.key, patch)}
+              multi={mode === "receipt"}
+              onSwitchToSearch={onSwitchToSearch}
+            />
           </li>
         ))}
       </ul>
@@ -335,11 +367,30 @@ export function ProductImport({
         <PCard className="space-y-3 !p-4" aria-label="등록 확인">
           <p className="font-bold text-ink">저장 전 확인</p>
           <ul className="space-y-2">
-            {chosen.map((d) => {
+            {chosen.map((ch) => {
+              if (ch.kind === "manual")
+                return (
+                  <li key={ch.key} className="rounded-2xl bg-ivory p-3 text-sm" aria-label={`등록할 제품: ${ch.name}`}>
+                    <p className="font-bold text-ink">
+                      {ch.name}
+                      {ch.strength && ` ${ch.strength}`}
+                    </p>
+                    <p className="mt-1 flex flex-wrap items-center gap-1">
+                      <StatusPill tone="dashed" className="!px-2.5 !py-0.5 !text-xs">
+                        직접 입력 · 식약처 확인 안 됨
+                      </StatusPill>
+                      <StatusPill tone="warn" className="!px-2.5 !py-0.5 !text-xs">
+                        미분류 · 확인 필요
+                      </StatusPill>
+                    </p>
+                    <p className="mt-1 text-xs text-ink-soft">성분·약 종류는 비워 둬요. 저장 후 약 종류를 직접 고를 수 있어요.</p>
+                  </li>
+                );
+              const d = ch.d;
               const it = productToItem(d);
               const c = classify(d.classRaw ?? d.productType, d.ingredient);
               return (
-                <li key={d.itemSeq} className="rounded-2xl bg-ivory p-3 text-sm" aria-label={`등록할 제품: ${d.name}`}>
+                <li key={ch.key} className="rounded-2xl bg-ivory p-3 text-sm" aria-label={`등록할 제품: ${d.name}`}>
                   <p className="font-bold text-ink">{d.name}</p>
                   <p className="text-ink-soft">
                     {[d.company, it.ingredients && `성분 ${it.ingredients}`, it.strength && `함량 ${it.strength}`, d.category].filter(Boolean).join(" · ")}
@@ -394,8 +445,13 @@ export function ProductImport({
         {undecided.length > 0 && (
           <p className="text-sm font-semibold text-blush-700">제품을 골라 주세요 ({undecided.length}곳). 확실하지 않으면 ‘등록 안 함’을 고르세요.</p>
         )}
+        {manualMissing.length > 0 && <p className="text-sm font-semibold text-blush-700">직접 입력할 약 이름을 적어 주세요.</p>}
         <Alert>{error}</Alert>
-        <PButton className="w-full" disabled={stage === "saving" || chosen.length === 0 || searching || undecided.length > 0} onClick={() => void register()}>
+        <PButton
+          className="w-full"
+          disabled={stage === "saving" || chosen.length === 0 || searching || undecided.length > 0 || manualMissing.length > 0}
+          onClick={() => void register()}
+        >
           {stage === "saving" ? "등록 중…" : chosen.length ? `확인한 제품 ${chosen.length}개 등록` : "제품을 골라 주세요"}
         </PButton>
       </div>
@@ -406,14 +462,45 @@ export function ProductImport({
 function LineCard({
   line: l,
   onPick,
+  onManual,
   multi,
   onSwitchToSearch,
 }: {
   line: Line;
-  onPick: (p: string | null) => void;
+  onPick: (p: string | null | undefined) => void;
+  onManual: (patch: Partial<Pick<Line, "manualName" | "manualStrength">>) => void;
   multi: boolean;
   onSwitchToSearch?: (q: string) => void;
 }) {
+  const manualFields = l.pick === MANUAL && (
+    <div
+      className="mt-2 grid gap-2 rounded-2xl border border-dashed border-line bg-white p-3 sm:grid-cols-[1fr_9rem]"
+      aria-label={`${l.raw || l.query} 직접 입력`}
+    >
+      <label className="block">
+        <span className="mb-1 block text-xs font-bold text-ink-soft">약 이름 (직접 입력)</span>
+        <input
+          value={l.manualName}
+          maxLength={100}
+          onChange={(e) => onManual({ manualName: e.target.value })}
+          aria-label="직접 입력할 약 이름"
+          className="h-12 w-full rounded-xl border border-line bg-white px-3 text-base"
+        />
+      </label>
+      <label className="block">
+        <span className="mb-1 block text-xs font-bold text-ink-soft">함량 (선택)</span>
+        <input
+          value={l.manualStrength}
+          maxLength={50}
+          placeholder="예: 500mg"
+          onChange={(e) => onManual({ manualStrength: e.target.value })}
+          aria-label="직접 입력할 함량"
+          className="h-12 w-full rounded-xl border border-line bg-white px-3 text-base"
+        />
+      </label>
+      <p className="text-xs text-ink-soft sm:col-span-2">식약처에서 확인하지 않은 약으로 표시돼요. 성분·약 종류는 지어내지 않고 비워 둬요.</p>
+    </div>
+  );
   return (
     <PCard className="!p-4" aria-label={`읽은 줄: ${l.raw || l.query}`}>
       <div className="flex items-start justify-between gap-2">
@@ -431,11 +518,23 @@ function LineCard({
       {(l.status === "none" || l.status === "failed") && (
         <div className="mt-2 space-y-2 text-sm">
           <p className="text-blush-700">{l.status === "failed" ? l.message : "식약처 제품 정보에서 이 이름을 찾지 못했어요. 제품을 추측하지 않아요."}</p>
-          {onSwitchToSearch && (
-            <PButton size="sm" variant="soft" icon={Search} onClick={() => onSwitchToSearch(l.query)}>
-              직접 검색으로 찾기
-            </PButton>
-          )}
+          <div className="flex flex-wrap gap-2">
+            {l.pick === MANUAL ? (
+              <PButton size="sm" variant="ghost" onClick={() => onPick(undefined)}>
+                직접 입력 취소
+              </PButton>
+            ) : (
+              <PButton size="sm" variant="secondary" icon={PencilLine} onClick={() => onPick(MANUAL)}>
+                이름만 직접 입력해 등록
+              </PButton>
+            )}
+            {onSwitchToSearch && l.pick !== MANUAL && (
+              <PButton size="sm" variant="soft" icon={Search} onClick={() => onSwitchToSearch(l.query)}>
+                다른 이름으로 검색
+              </PButton>
+            )}
+          </div>
+          {manualFields}
         </div>
       )}
       {l.candidates.length > 0 && (
@@ -479,6 +578,16 @@ function LineCard({
             <input type="radio" name={`pick-${l.key}`} className="accent-brand-700" checked={l.pick === null} onChange={() => onPick(null)} />
             {multi ? "이 줄은 등록 안 함" : "여기에 없어요 · 등록 안 함"}
           </label>
+          <label
+            className={cn(
+              "flex cursor-pointer items-center gap-2 rounded-2xl border p-3 text-sm",
+              l.pick === MANUAL ? "border-brand-500 bg-brand-50" : "border-line bg-white",
+            )}
+          >
+            <input type="radio" name={`pick-${l.key}`} className="accent-brand-700" checked={l.pick === MANUAL} onChange={() => onPick(MANUAL)} />
+            목록에 없어요 · 이름만 직접 입력
+          </label>
+          {manualFields}
         </fieldset>
       )}
     </PCard>

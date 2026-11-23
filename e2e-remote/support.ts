@@ -190,6 +190,11 @@ export async function openLegacyMeds(page: Page) {
   await page.locator("details", { hasText: "예전 방식으로 적어 둔 약" }).evaluate((el) => ((el as HTMLDetailsElement).open = true));
 }
 
+/** 함께 보기 → '사람 초대 · 연결 관리' 영역 열기 (이미 열려 있으면 그대로 — 눌러서 닫지 않음) */
+export async function openShareManagement(page: Page) {
+  await page.locator("details", { hasText: "사람 초대 · 연결 관리" }).evaluate((el) => ((el as HTMLDetailsElement).open = true));
+}
+
 export const menu = (page: Page, name: string) => page.getByRole("navigation", { name: "메뉴" }).getByRole("button", { name, exact: true });
 
 export async function expectNoHorizontalOverflow(page: Page) {

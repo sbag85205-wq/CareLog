@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { ROLE_HOME } from "@/lib/roles";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
-import { clientKey, isSameOrigin, json, limiters, readJson, str } from "@/server/patient-auth/http";
+import { clientKey, isSameOrigin, json, loginGuards, readJson, str } from "@/server/patient-auth/http";
 import { withMinDuration } from "@/server/patient-auth/rate-limit";
 import { createSessionClient } from "@/server/supabase/session";
 import { getViewer } from "@/server/supabase/viewer";
@@ -19,7 +19,9 @@ export async function POST(req: NextRequest) {
   if (!isSameOrigin(req)) return json({ ok: false, message: FAILED }, 403);
 
   return withMinDuration(600, async () => {
-    if (!limiters.memberLogin.hit(clientKey(req))) {
+    const ip = clientKey(req);
+    const guard = loginGuards.member;
+    if (!guard.allowRequest(ip)) {
       console.warn("[member-auth] login 거부: rate_limited");
       return json({ ok: false, message: FAILED }, 429);
     }
@@ -28,9 +30,16 @@ export async function POST(req: NextRequest) {
     const password = str(body?.password, 200);
     if (!email || !password || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ ok: false, message: FAILED }, 401);
 
+    if (guard.accountBlocked(ip, email)) {
+      console.warn("[member-auth] login 거부: account_rate_limited");
+      return json({ ok: false, message: FAILED }, 429);
+    }
     const client = await createSessionClient();
     const { error } = await client.auth.signInWithPassword({ email, password });
-    if (error) return json({ ok: false, message: FAILED }, 401);
+    if (error) {
+      guard.recordFailure(ip, email);
+      return json({ ok: false, message: FAILED }, 401);
+    }
 
     const viewer = await getViewer(client);
     if (!viewer || viewer.role === "patient" || viewer.disabled) {

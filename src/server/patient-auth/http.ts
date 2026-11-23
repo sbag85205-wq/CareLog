@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { PATIENT_AUTH_MESSAGES as M } from "@/lib/patient-auth/rules";
 import { isAdminConfigured } from "@/server/supabase/admin";
+import { createLoginGuard, readLoginLimit } from "./login-guard";
 import { createRateLimiter } from "./rate-limit";
 
 /** 비밀번호 설정용 일회용 권한 쿠키 — JS에서 읽을 수 없고 이 API 경로로만 전송됨 */
@@ -12,8 +13,12 @@ export const SETUP_COOKIE_PATH = "/api/patient-auth";
 export const limiters = {
   verify: createRateLimiter(10, 10 * 60_000),
   setPassword: createRateLimiter(10, 10 * 60_000),
-  login: createRateLimiter(20, 10 * 60_000),
-  memberLogin: createRateLimiter(20, 10 * 60_000),
+};
+
+/** 로그인 제한 — CARELOG_LOGIN_RATE_LIMIT 가 없으면 기존과 같음 (IP당 10분 20회) */
+export const loginGuards = {
+  patient: createLoginGuard(readLoginLimit(process.env.CARELOG_LOGIN_RATE_LIMIT)),
+  member: createLoginGuard(readLoginLimit(process.env.CARELOG_LOGIN_RATE_LIMIT)),
 };
 
 export function json(body: unknown, status = 200) {

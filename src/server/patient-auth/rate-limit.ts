@@ -8,6 +8,8 @@
 export interface RateLimiter {
   /** 허용되면 true, 한도를 넘으면 false */
   hit(key: string): boolean;
+  /** 세지 않고 확인만: 이미 한도에 도달했으면 true */
+  exceeded(key: string): boolean;
 }
 
 export function createRateLimiter(max: number, windowMs: number, now: () => number = Date.now): RateLimiter {
@@ -25,6 +27,10 @@ export function createRateLimiter(max: number, windowMs: number, now: () => numb
       }
       b.count += 1;
       return b.count <= max;
+    },
+    exceeded(key) {
+      const b = buckets.get(key);
+      return Boolean(b && b.resetAt > now() && b.count >= max);
     },
   };
 }
