@@ -1,19 +1,32 @@
 "use client";
 
-import { ChevronLeft, MessageSquarePlus, Pencil, Presentation, Star, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, Presentation, Share2, Star } from "lucide-react";
 import { useState } from "react";
-import { Alert, ChipGroup, cn, Notice, PButton, PCard, SoftSheet, StatusPill, Switch, TextArea } from "@/components/patient-ui/kit";
+import { Alert, cn, Notice, PButton, PCard, SoftSheet, StatusPill, Switch } from "@/components/patient-ui/kit";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { formatDateTime, formatLongKoreanDate } from "@/lib/date";
+import { formatLongKoreanDate } from "@/lib/date";
 import type { SupabaseRepository } from "@/lib/repository/supabase";
-import { DEPARTMENTS, EXPERIENCE_TAGS, itemsOf, notesOf, slashDate, type Prescription, type RxNote, type RxSnapshot } from "@/lib/rx/model";
+import {
+  DEPARTMENTS,
+  dotDate,
+  experienceSentence,
+  itemsOf,
+  notesOf,
+  slashDate,
+  SOURCE_LABEL,
+  tagLabel,
+  type Prescription,
+  type RxNote,
+  type RxSnapshot,
+} from "@/lib/rx/model";
 import type { RxStore } from "@/lib/rx/store";
 import type { VisitQuestion } from "@/types";
-import { howToTake, QuestionItem, SourceNote } from "./RxParts";
+import { NoteCard, NoteEditor } from "./NoteEditor";
+import { CategoryPills, howToTake, KindPill, QuestionItem, SourceNote, SOURCE_TEXT, TagPills } from "./RxParts";
 
-const toggle = (list: string[], t: string) => (list.includes(t) ? list.filter((x) => x !== t) : [...list, t]);
+const dateTitle = (p: Prescription) => `${formatLongKoreanDate(p.prescribedOn).replace(/ \S+요일$/, "")} ${p.kind === "otc" ? "등록" : "처방"}`;
 
-/** 처방 상세 — 그때 확인해 저장한 약·복용 방법·기간·주의사항 + 환자 본인이 남긴 복용 경험 */
+/** 기록 상세 (처방·일반약) — 그때 확인해 저장한 약·복용 방법·주의사항 + 사용자가 남긴 복용 경험 */
 export function RxDetail({
   prescription: p,
   snapshot,
@@ -22,6 +35,8 @@ export function RxDetail({
   questions,
   readOnly,
   onBack,
+  onOpenItem,
+  onShare,
 }: {
   prescription: Prescription;
   snapshot: RxSnapshot;
@@ -30,6 +45,8 @@ export function RxDetail({
   questions: VisitQuestion[];
   readOnly?: boolean;
   onBack?: () => void;
+  onOpenItem?: (itemId: string) => void;
+  onShare?: (prescriptionId: string) => void;
 }) {
   const items = itemsOf(snapshot, p.id);
   const notes = notesOf(snapshot, p.id);
@@ -39,36 +56,41 @@ export function RxDetail({
   const action = useAsyncAction();
   const [notice, setNotice] = useState<string | null>(null);
   const run = (fn: () => Promise<unknown>) => void action.run(fn);
+  const otc = p.kind === "otc";
+  const activeShares = snapshot.shares.filter((s) => s.prescriptionId === p.id && !s.revokedAt).length;
 
   return (
-    <div className="space-y-4" aria-label="처방 상세">
+    <div className="space-y-4" aria-label="기록 상세">
       {onBack && (
         <button
           type="button"
           onClick={onBack}
-          className="-ml-2 inline-flex min-h-10 items-center gap-0.5 rounded-xl px-2 text-ink-soft hover:bg-ivory-deep hover:text-ink lg:hidden"
+          className="-ml-2 inline-flex min-h-11 items-center gap-0.5 rounded-xl px-2 text-ink-soft hover:bg-ivory-deep hover:text-ink lg:hidden"
         >
-          <ChevronLeft className="h-5 w-5" aria-hidden /> 처방 목록
+          <ChevronLeft className="h-5 w-5" aria-hidden /> 목록으로
         </button>
       )}
       <PCard>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 className="text-[1.6rem] leading-tight font-extrabold text-ink">{formatLongKoreanDate(p.prescribedOn).replace(/ \S+요일$/, "")} 처방</h2>
-            <p className="mt-1 flex flex-wrap items-center gap-2 text-ink-soft">
-              <StatusPill tone="outline">{p.department || "진료과 미입력"}</StatusPill>
+            <h2 className="text-[1.6rem] leading-tight font-extrabold text-ink">{dateTitle(p)}</h2>
+            <p className="mt-1.5 flex flex-wrap items-center gap-2 text-ink-soft">
+              <KindPill p={p} />
+              {!otc && <StatusPill tone="outline">{p.department || "진료과 미입력"}</StatusPill>}
               {p.clinic && <span className="text-sm">{p.clinic}</span>}
-              <span className="text-sm">약 {items.length}개</span>
+              <span className="text-sm">
+                {otc ? "제품" : "약"} {items.length}개 · {SOURCE_LABEL[p.source]}로 등록
+              </span>
             </p>
           </div>
           {!readOnly && store && (
             <button
               type="button"
               aria-pressed={p.starred}
-              aria-label={p.starred ? "보관 해제" : "처방 보관 (★)"}
+              aria-label={p.starred ? "보관 해제" : "기록 보관 (★)"}
               onClick={() => run(() => store.setStarred(p.id, !p.starred))}
               className={cn(
-                "flex h-11 w-11 items-center justify-center rounded-2xl border",
+                "flex h-12 w-12 items-center justify-center rounded-2xl border",
                 p.starred ? "border-sage-300 bg-sage-100 text-sage-800" : "border-line bg-white text-ink-soft",
               )}
             >
@@ -82,21 +104,16 @@ export function RxDetail({
           </PButton>
           {!readOnly && store && (
             <PButton size="md" variant="secondary" icon={Pencil} onClick={() => setEditMeta((v) => !v)}>
-              처방 정보 수정
+              {otc ? "등록 정보 수정" : "처방 정보 수정"}
+            </PButton>
+          )}
+          {!readOnly && onShare && (
+            <PButton size="md" variant="secondary" icon={Share2} onClick={() => onShare(p.id)}>
+              {activeShares ? `공유 중 ${activeShares}명` : "이 기록 공유하기"}
             </PButton>
           )}
         </div>
         {editMeta && store && <MetaEditor p={p} store={store} onDone={() => setEditMeta(false)} />}
-        {!readOnly && store && (
-          <div className="mt-4 border-t border-line pt-3">
-            <Switch
-              label="보호자와 공유"
-              description="보호자에게 '약 정보' 공유를 허락했을 때 이 처방과 복용 경험이 보여요"
-              checked={p.visibleToGuardian}
-              onChange={(v) => run(() => store.setVisibleToGuardian(p.id, v))}
-            />
-          </div>
-        )}
         <Alert className="mt-3">{action.error}</Alert>
         <Notice className="mt-3">{notice}</Notice>
         {p.guidance && (
@@ -106,27 +123,50 @@ export function RxDetail({
         )}
       </PCard>
 
-      <section aria-label="그때 받은 약" className="space-y-2">
-        <h3 className="px-1 text-lg font-bold text-ink">그때 받은 약</h3>
+      <section aria-label={otc ? "등록한 제품" : "그때 받은 약"} className="space-y-2">
+        <h3 className="px-1 text-lg font-bold text-ink">{otc ? "등록한 제품" : "그때 받은 약"}</h3>
         {items.map((i) => (
-          <PCard key={i.id} className="!p-4" aria-label={`처방 약: ${i.name}`}>
+          <PCard key={i.id} className="!p-4" aria-label={`${otc ? "제품" : "처방 약"}: ${i.name}`}>
             <div className="flex items-start justify-between gap-2">
-              <p className="min-w-0 font-bold break-words text-ink">
+              <p className="min-w-0 text-lg font-bold break-words text-ink">
                 {i.name}
                 {i.strength && !i.name.includes(i.strength) && <span className="ml-1 text-ink-soft">{i.strength}</span>}
               </p>
-              {i.active && <StatusPill check>복용 중</StatusPill>}
+              <span className="flex shrink-0 gap-1">
+                {i.starred && <Star className="h-5 w-5 text-sage-700" fill="currentColor" aria-label="보관한 약" />}
+                {i.active && <StatusPill check>복용 중</StatusPill>}
+              </span>
             </div>
-            <p className="mt-1 text-sm font-semibold text-sage-800">{howToTake(i)}</p>
-            <p className="text-sm text-ink-soft">기간: {i.duration || "미입력"}</p>
+            {(i.ingredients || i.company) && (
+              <p className="mt-0.5 text-sm text-ink-soft">{[i.ingredients && `성분 ${i.ingredients}`, i.company].filter(Boolean).join(" · ")}</p>
+            )}
+            <div className="mt-1.5">
+              <CategoryPills item={i} />
+            </div>
+            {(!otc || i.dosage || i.frequency) && <p className="mt-1.5 text-sm font-semibold text-sage-800">{howToTake(i)}</p>}
+            {!otc && <p className="text-sm text-ink-soft">기간: {i.duration || "미입력"}</p>}
             <div className="mt-2 space-y-1.5">
               <SourceNote source="rx" text={i.cautionRx} />
               <SourceNote source="mfds" text={i.cautionMfds} />
             </div>
             {!readOnly && store && (
               <div className="mt-2">
-                <Switch label="지금 복용 중" checked={i.active} onChange={(v) => run(() => store.setItemActive(i.id, v))} />
+                <Switch
+                  label="지금 복용 중"
+                  description={otc ? "등록했다고 복용한 것으로 보지 않아요. 실제로 먹고 있을 때만 켜 주세요." : undefined}
+                  checked={i.active}
+                  onChange={(v) => run(() => store.setItemActive(i.id, v))}
+                />
               </div>
+            )}
+            {onOpenItem && (
+              <button
+                type="button"
+                onClick={() => onOpenItem(i.id)}
+                className="mt-2 inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-sage-700 underline-offset-4 hover:underline"
+              >
+                이 약의 경험 모아 보기 · 종류 고치기 <ChevronRight className="h-4 w-4" aria-hidden />
+              </button>
             )}
           </PCard>
         ))}
@@ -134,7 +174,10 @@ export function RxDetail({
 
       <section aria-label="복용 후 느낀 점" className="space-y-2">
         <h3 className="px-1 text-lg font-bold text-ink">복용 후 느낀 점</h3>
-        <p className="px-1 text-xs text-ink-soft">환자 본인이 남긴 경험이에요. 도움이 된 점과 불편했던 점을 함께 적을 수 있어요.</p>
+        <p className="px-1 text-xs text-ink-soft">
+          {SOURCE_TEXT.user}이에요. 도움이 된 점과 불편했던 점을 함께 적을 수 있고, 여러 약을 함께 먹었다면 ‘{otc ? "이 등록 전체" : "처방 전체"}’로 남겨
+          두세요.
+        </p>
         {!readOnly && store && <NoteEditor p={p} items={items} store={store} />}
         {notes.length === 0 ? (
           <PCard tone="ivory">
@@ -142,32 +185,34 @@ export function RxDetail({
           </PCard>
         ) : (
           <ul className="space-y-2" aria-label="복용 경험 목록">
-            {notes.map((n) => (
-              <li key={n.id}>
-                <NoteCard
-                  note={n}
-                  itemName={items.find((i) => i.id === n.itemId)?.name}
-                  p={p}
-                  items={items}
-                  store={readOnly ? null : store}
-                  onQuestion={
-                    readOnly || !repo
-                      ? undefined
-                      : async () => {
-                          const text = questionFromNote(p, n, items.find((i) => i.id === n.itemId)?.name);
-                          const r = await action.run(() => repo.addVisitQuestion(p.patientId, text, p.id));
-                          if (r.ok) setNotice("다음 진료 질문에 담았어요. 진료 준비와 '진료 때 보여주기'에서 고칠 수 있어요.");
-                        }
-                  }
-                />
-              </li>
-            ))}
+            {notes.map((n) => {
+              const name = items.find((i) => i.id === n.itemId)?.name;
+              return (
+                <li key={n.id}>
+                  <NoteCard
+                    note={n}
+                    targetName={name ?? (otc ? "이 등록 전체" : "처방 전체")}
+                    items={items}
+                    kind={p.kind}
+                    store={readOnly ? null : store}
+                    onQuestion={
+                      readOnly || !repo
+                        ? undefined
+                        : async () => {
+                            const r = await action.run(() => repo.addVisitQuestion(p.patientId, questionFromNote(p, n, name), p.id));
+                            if (r.ok) setNotice("다음 진료 질문에 담았어요. 진료 준비와 '진료 때 보여주기'에서 고칠 수 있어요.");
+                          }
+                    }
+                  />
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
 
       {related.length > 0 && (
-        <section aria-label="이 처방에서 담은 질문" className="space-y-2">
+        <section aria-label="이 기록에서 담은 질문" className="space-y-2">
           <h3 className="px-1 text-lg font-bold text-ink">다음 진료 질문</h3>
           {related.map((q) => (
             <QuestionItem key={`${q.id}-${q.updatedAt ?? ""}`} q={q} repo={repo} readOnly={readOnly} />
@@ -184,14 +229,17 @@ export function RxDetail({
 
 /** 복용 메모 → 질문 문장 (고칠 수 있음) */
 export function questionFromNote(p: Prescription, n: RxNote, itemName?: string): string {
-  const head = `${slashDate(p.prescribedOn)} ${p.department || ""} 처방${itemName ? ` ${itemName}` : ""}`.replace(/\s+/g, " ").trim();
-  const body = [n.tags.join(", "), n.memo].filter(Boolean).join(" — ");
+  const head = `${slashDate(p.prescribedOn)} ${p.kind === "otc" ? "일반약" : `${p.department || ""} 처방`}${itemName ? ` ${itemName}` : ""}`
+    .replace(/\s+/g, " ")
+    .trim();
+  const body = [n.tags.map(tagLabel).join(", "), n.memo].filter(Boolean).join(" — ");
   return `${head}: ${body} — 괜찮을까요?`.slice(0, 200);
 }
 
 function MetaEditor({ p, store, onDone }: { p: Prescription; store: RxStore; onDone: () => void }) {
   const [date, setDate] = useState(p.prescribedOn);
   const [dept, setDept] = useState(p.department);
+  const [clinic, setClinic] = useState(p.clinic);
   const action = useAsyncAction();
   return (
     <form
@@ -199,26 +247,31 @@ function MetaEditor({ p, store, onDone }: { p: Prescription; store: RxStore; onD
       onSubmit={async (e) => {
         e.preventDefault();
         const r = await action.run(() =>
-          store.updatePrescription(p.id, {
-            prescribedOn: date,
-            department: dept,
-          }),
+          store.updatePrescription(p.id, { prescribedOn: date, clinic, ...(p.kind === "prescription" && { department: dept }) }),
         );
         if (r.ok) onDone();
       }}
     >
       <label className="block">
-        <span className="mb-1 block text-xs font-bold text-ink-soft">처방일</span>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-11 w-full rounded-xl border border-line bg-white px-3" />
+        <span className="mb-1 block text-xs font-bold text-ink-soft">{p.kind === "otc" ? "구매·등록일" : "처방일"}</span>
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-12 w-full rounded-xl border border-line bg-white px-3" />
       </label>
-      <label className="block">
-        <span className="mb-1 block text-xs font-bold text-ink-soft">진료과</span>
-        <select value={dept} onChange={(e) => setDept(e.target.value)} className="h-11 w-full rounded-xl border border-line bg-white px-3">
-          <option value="">선택 안 함</option>
-          {DEPARTMENTS.map((d) => (
-            <option key={d}>{d}</option>
-          ))}
-        </select>
+      {p.kind === "prescription" ? (
+        <label className="block">
+          <span className="mb-1 block text-xs font-bold text-ink-soft">진료과</span>
+          <select value={dept} onChange={(e) => setDept(e.target.value)} className="h-12 w-full rounded-xl border border-line bg-white px-3">
+            <option value="">선택 안 함</option>
+            {DEPARTMENTS.map((d) => (
+              <option key={d}>{d}</option>
+            ))}
+          </select>
+        </label>
+      ) : (
+        <span />
+      )}
+      <label className="block sm:col-span-2">
+        <span className="mb-1 block text-xs font-bold text-ink-soft">{p.kind === "otc" ? "약국 (선택)" : "의료기관 (선택)"}</span>
+        <input value={clinic} maxLength={60} onChange={(e) => setClinic(e.target.value)} className="h-12 w-full rounded-xl border border-line bg-white px-3" />
       </label>
       <Alert className="sm:col-span-2">{action.error}</Alert>
       <PButton type="submit" size="sm" className="sm:col-span-2" disabled={!date || action.pending}>
@@ -228,195 +281,7 @@ function MetaEditor({ p, store, onDone }: { p: Prescription; store: RxStore; onD
   );
 }
 
-function TagPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
-  return (
-    <div className="space-y-2">
-      <div>
-        <p className="mb-1 text-xs font-bold text-sage-800">도움이 된 점</p>
-        <ChipGroup
-          ariaLabel="도움이 된 점"
-          value={value}
-          onChange={(t) => onChange(toggle(value, t))}
-          options={EXPERIENCE_TAGS.good.map((t) => ({ value: t, label: t }))}
-        />
-      </div>
-      <div>
-        <p className="mb-1 text-xs font-bold text-blush-700">불편했던 점</p>
-        <ChipGroup
-          ariaLabel="불편했던 점"
-          value={value}
-          onChange={(t) => onChange(toggle(value, t))}
-          options={EXPERIENCE_TAGS.bad.map((t) => ({ value: t, label: t }))}
-        />
-      </div>
-    </div>
-  );
-}
-
-function TargetPicker({ value, onChange, items }: { value: string; onChange: (v: string) => void; items: { id: string; name: string }[] }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-bold text-ink-soft">어느 약에 대한 기록인가요?</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-11 w-full rounded-xl border border-line bg-white px-3 text-[0.95rem]"
-        aria-label="기록 대상"
-      >
-        <option value="">처방 전체 (함께 먹은 약 모두)</option>
-        {items.map((i) => (
-          <option key={i.id} value={i.id}>
-            {i.name}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
-}
-
-function NoteEditor({ p, items, store }: { p: Prescription; items: { id: string; name: string }[]; store: RxStore }) {
-  const [tags, setTags] = useState<string[]>([]);
-  const [memo, setMemo] = useState("");
-  const [target, setTarget] = useState("");
-  const action = useAsyncAction();
-  return (
-    <PCard className="space-y-3" aria-label="복용 경험 남기기">
-      <TargetPicker value={target} onChange={setTarget} items={items} />
-      <TagPicker value={tags} onChange={setTags} />
-      <TextArea
-        label="메모"
-        value={memo}
-        onChange={(e) => setMemo(e.target.value)}
-        rows={2}
-        maxLength={1000}
-        counter
-        placeholder="예: 콧물은 줄었는데 저녁 약 먹고 속이 쓰렸어요 (가상 데이터만 입력)"
-      />
-      <Alert>{action.error}</Alert>
-      <PButton
-        size="md"
-        className="w-full"
-        disabled={(tags.length === 0 && !memo.trim()) || action.pending}
-        onClick={async () => {
-          const r = await action.run(() =>
-            store.addNote({
-              prescriptionId: p.id,
-              patientId: p.patientId,
-              itemId: target || null,
-              tags,
-              memo,
-            }),
-          );
-          if (r.ok) {
-            setTags([]);
-            setMemo("");
-            setTarget("");
-          }
-        }}
-      >
-        복용 경험 저장
-      </PButton>
-    </PCard>
-  );
-}
-
-function NoteCard({
-  note: n,
-  itemName,
-  p,
-  items,
-  store,
-  onQuestion,
-}: {
-  note: RxNote;
-  itemName?: string;
-  p: Prescription;
-  items: { id: string; name: string }[];
-  store: RxStore | null;
-  onQuestion?: () => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [tags, setTags] = useState(n.tags);
-  const [memo, setMemo] = useState(n.memo);
-  const [target, setTarget] = useState(n.itemId ?? "");
-  const action = useAsyncAction();
-  const edited = n.updatedAt.slice(0, 16) !== n.createdAt.slice(0, 16);
-  return (
-    <PCard className="!p-4" aria-label={`복용 경험: ${itemName ?? "처방 전체"}`}>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-ink-soft">
-          <span className="font-bold text-sage-800">환자 본인이 남긴 경험</span> · {itemName ?? "처방 전체"} · 작성 {formatDateTime(n.createdAt)}
-          {edited && ` · 수정 ${formatDateTime(n.updatedAt)}`}
-        </p>
-      </div>
-      {editing && store ? (
-        <div className="mt-3 space-y-3">
-          <TargetPicker value={target} onChange={setTarget} items={items} />
-          <TagPicker value={tags} onChange={setTags} />
-          <TextArea label="메모" value={memo} onChange={(e) => setMemo(e.target.value)} rows={2} maxLength={1000} counter />
-          <Alert>{action.error}</Alert>
-          <div className="flex gap-2">
-            <PButton
-              size="sm"
-              disabled={(tags.length === 0 && !memo.trim()) || action.pending}
-              onClick={async () => {
-                const r = await action.run(() =>
-                  store.updateNote(n.id, {
-                    itemId: target || null,
-                    tags,
-                    memo,
-                  }),
-                );
-                if (r.ok) setEditing(false);
-              }}
-            >
-              수정 저장
-            </PButton>
-            <PButton size="sm" variant="ghost" onClick={() => setEditing(false)}>
-              취소
-            </PButton>
-          </div>
-        </div>
-      ) : (
-        <>
-          {n.tags.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {n.tags.map((t) => (
-                <StatusPill key={t} tone={(EXPERIENCE_TAGS.bad as readonly string[]).includes(t) ? "warn" : "sage"}>
-                  {t}
-                </StatusPill>
-              ))}
-            </div>
-          )}
-          {n.memo && <p className="mt-2 break-words whitespace-pre-line text-ink">{n.memo}</p>}
-          {(store || onQuestion) && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {onQuestion && (
-                <PButton size="sm" variant="soft" icon={MessageSquarePlus} onClick={onQuestion}>
-                  다음 진료 질문에 담기
-                </PButton>
-              )}
-              {store && (
-                <>
-                  <PButton size="sm" variant="ghost" icon={Pencil} onClick={() => setEditing(true)}>
-                    수정
-                  </PButton>
-                  <PButton size="sm" variant="ghost" icon={Trash2} onClick={() => void action.run(() => store.deleteNote(n.id))} aria-label="복용 경험 삭제">
-                    삭제
-                  </PButton>
-                </>
-              )}
-            </div>
-          )}
-          <Alert className="mt-2">{action.error}</Alert>
-        </>
-      )}
-      <span className="sr-only">{p.department}</span>
-    </PCard>
-  );
-}
-
-/** 진료 때 보여주기 — 날짜·진료과·당시 약·복용 경험·관련 질문을 한 화면에 */
+/** 진료 때 보여주기 — 날짜·진료과·당시 약(성분·함량)·복용 경험·질문을 한 화면에 */
 export function VisitShow({ p, snapshot, questions, repo }: { p: Prescription; snapshot: RxSnapshot; questions: VisitQuestion[]; repo?: SupabaseRepository }) {
   const items = itemsOf(snapshot, p.id);
   const notes = notesOf(snapshot, p.id);
@@ -425,38 +290,51 @@ export function VisitShow({ p, snapshot, questions, repo }: { p: Prescription; s
   return (
     <div className="space-y-4 text-[1.05rem]" aria-label="진료 때 보여줄 내용">
       <PCard tone="tint">
-        <p className="text-sm font-bold text-sage-800">처방</p>
+        <p className="text-sm font-bold text-sage-800">{p.kind === "otc" ? "일반약 등록" : "처방"}</p>
         <p className="text-2xl font-extrabold text-sage-900">
-          {formatLongKoreanDate(p.prescribedOn).replace(/ \S+요일$/, "")} · {p.department || "진료과 미입력"}
+          {dotDate(p.prescribedOn)} · {p.kind === "otc" ? p.clinic || "일반약" : p.department || "진료과 미입력"}
         </p>
-        {p.clinic && <p className="text-sm text-sage-800">{p.clinic}</p>}
+        {p.kind === "prescription" && p.clinic && <p className="text-sm text-sage-800">{p.clinic}</p>}
       </PCard>
       <PCard>
-        <p className="mb-2 font-bold text-ink">당시 약 ({items.length}개)</p>
+        <p className="mb-2 font-bold text-ink">
+          {p.kind === "otc" ? "제품" : "당시 약"} ({items.length}개)
+        </p>
         <ul className="space-y-2">
           {items.map((i) => (
             <li key={i.id} className="border-b border-line pb-2 last:border-0">
-              <p className="font-bold text-ink">{i.name}</p>
+              <p className="font-bold text-ink">
+                {i.name}
+                {i.strength && !i.name.includes(i.strength) && ` ${i.strength}`}
+              </p>
+              {i.ingredients && <p className="text-sm text-ink-soft">성분 {i.ingredients}</p>}
               <p className="text-sm text-ink-soft">
-                {howToTake(i)} · {i.duration || "기간 미입력"}
+                {howToTake(i)}
+                {i.duration && ` · ${i.duration}`}
               </p>
             </li>
           ))}
         </ul>
       </PCard>
       <PCard>
-        <p className="mb-2 font-bold text-ink">복용 경험 (환자 본인 기록)</p>
+        <p className="mb-1 font-bold text-ink">복용 경험</p>
+        <p className="mb-2 text-xs text-ink-soft">출처: {SOURCE_TEXT.user} — 의학적 판단이 아니에요.</p>
         {notes.length === 0 ? (
           <p className="text-sm text-ink-soft">남긴 경험이 없어요.</p>
         ) : (
           <ul className="space-y-2">
-            {notes.map((n) => (
-              <li key={n.id} className="rounded-xl bg-ivory p-3">
-                <p className="text-xs text-ink-soft">{items.find((i) => i.id === n.itemId)?.name ?? "처방 전체"}</p>
-                <p className="font-semibold text-ink">{n.tags.join(" · ")}</p>
-                {n.memo && <p className="text-ink">{n.memo}</p>}
-              </li>
-            ))}
+            {notes.map((n) => {
+              const name = items.find((i) => i.id === n.itemId)?.name;
+              return (
+                <li key={n.id} className="rounded-xl bg-ivory p-3">
+                  <p className="font-semibold text-ink">{experienceSentence(p, n, name)}</p>
+                  <div className="mt-1">
+                    <TagPills tags={n.tags} small />
+                  </div>
+                  {n.memo && <p className="mt-1 text-sm text-ink">“{n.memo}”</p>}
+                </li>
+              );
+            })}
           </ul>
         )}
       </PCard>
@@ -476,6 +354,7 @@ export function VisitShow({ p, snapshot, questions, repo }: { p: Prescription; s
           </div>
         )}
       </PCard>
+      <p className="px-1 text-xs text-ink-soft">이 화면은 사용자가 직접 보여 주는 기록이에요. 병원 시스템으로 전송되지 않아요.</p>
     </div>
   );
 }

@@ -11,6 +11,7 @@ import { normalizeStrength, parsePrescriptionMeta, parsePrescriptionText, search
 import type { ReadMethod, ReadProgress } from "@/lib/prescription/read-file";
 import type { MedicationInput } from "@/lib/repository/supabase";
 import { DEPARTMENTS, type RxItemInput } from "@/lib/rx/model";
+import { productToItem } from "@/lib/rx/product";
 
 type RowStatus = MatchStatus | "searching" | "manual";
 
@@ -275,6 +276,9 @@ export function PrescriptionImport({
         items: selected.map((r) => {
           const f = r.fields;
           const strength = f.strength.trim();
+          // 고른 식약처 제품의 성분·분류 (고르지 않았으면 '미분류 · 확인 필요')
+          const cand = r.pick ? r.candidates.find((c) => c.item.itemSeq === r.pick)?.item : undefined;
+          const prod = cand ? productToItem(cand) : undefined;
           const hasStrength = !strength || normalizeStrength(f.name) === normalizeStrength(strength) || f.name.includes(strength);
           return {
             name: (hasStrength ? f.name : `${f.name} ${strength}`).trim().slice(0, 100),
@@ -287,6 +291,12 @@ export function PrescriptionImport({
             cautionMfds: r.pick ? r.cautionMfds.slice(0, 1000) : "",
             externalItemSeq: r.pick ?? undefined,
             active: true,
+            ingredients: prod?.ingredients ?? "",
+            company: prod?.company ?? "",
+            drugClass: prod?.drugClass ?? "",
+            mfdsClass: prod?.mfdsClass ?? "",
+            categories: prod?.categories ?? ["unclassified"],
+            categorySource: prod?.categorySource ?? "none",
           };
         }),
       });
@@ -421,7 +431,7 @@ export function PrescriptionImport({
             <span className="mb-1 flex items-center gap-2 text-xs font-bold text-ink-soft">
               주의사항 · 복약 안내{" "}
               <StatusPill tone="ivory" className="!px-2 !py-0 !text-[0.7rem]">
-                출처: 처방전·복약 안내
+                출처: 처방전·복약 안내에 기재된 정보
               </StatusPill>
             </span>
             <textarea
@@ -620,7 +630,7 @@ function RowCard({
       {r.pick && (r.cautionMfds || r.cautionState) && (
         <div className="mt-2 rounded-xl bg-ivory px-3 py-2 text-xs text-ink" aria-label={`${title} 식약처 주의사항`}>
           <StatusPill tone="outline" className="!px-2 !py-0 !text-[0.7rem]">
-            출처: 식약처 제품 정보
+            출처: 식약처 제공 정보
           </StatusPill>
           <p className="mt-1">
             {r.cautionState === "loading"

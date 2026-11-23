@@ -23,8 +23,10 @@ export interface DrugSearchItem {
   ingredient: string;
   /** 전문/일반구분 (SPCLTY_PBLC) */
   category: string;
-  /** 분류명 (PRDUCT_TYPE) */
+  /** 분류명 (PRDUCT_TYPE, 코드 제외) */
   productType: string;
+  /** 약효 분류 원문 (PRDUCT_TYPE, 예: "[01140]해열.진통.소염제") — 약 종류 자동 분류에 사용 */
+  classRaw: string;
   /** 품목허가일자 (ITEM_PERMIT_DATE, YYYYMMDD) */
   permitDate: string;
   /** 취하 여부 (CANCEL_DATE·CANCEL_NAME) */
@@ -102,6 +104,7 @@ function toItem(raw: Record<string, unknown>): DrugSearchItem | null {
     ingredient: cleanIngredient(raw.ITEM_INGR_NAME),
     category: str(raw.SPCLTY_PBLC),
     productType: str(raw.PRDUCT_TYPE).replace(/^\s*\[[^\]]*\]\s*/, ""),
+    classRaw: str(raw.PRDUCT_TYPE),
     permitDate: str(raw.ITEM_PERMIT_DATE),
     canceled: Boolean(str(raw.CANCEL_DATE)) || /취하|취소/.test(str(raw.CANCEL_NAME)),
     ediCode: str(raw.EDI_CODE),

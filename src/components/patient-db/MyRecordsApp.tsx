@@ -1,15 +1,17 @@
 "use client";
 
-import { CalendarCheck, ChartNoAxesColumn, House, Pill, UsersRound } from "lucide-react";
+import { CalendarCheck, HeartPulse, House, Pill, UsersRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { MealsSection, RequestsSection } from "@/components/patient-db/CareSections";
 import { PatientConditionForm } from "@/components/patient-db/PatientConditionForm";
 import { PatientRecordsView } from "@/components/patient-db/PatientRecordsView";
-import { ShareView } from "@/components/patient-db/ShareView";
 import { VisitPrepView } from "@/components/patient-db/VisitPrepView";
 import { AppShell, type ShellTab } from "@/components/patient-ui/AppShell";
-import { MyMedsView, type MedsView } from "@/components/rx/MyMedsView";
+import { BodyView } from "@/components/rx/BodyView";
+import { MedRecordsView, type RecordsNav } from "@/components/rx/MedRecordsView";
+import { RegisterSheet } from "@/components/rx/RegisterSheet";
 import { RxHome } from "@/components/rx/RxHome";
+import { TogetherView } from "@/components/rx/TogetherView";
 import { Alert, cn, PButton, PCard, Segmented, SoftSheet, StatusPill, TextField } from "@/components/patient-ui/kit";
 import { CONDITION_WORD, SLEEP_WORD } from "@/components/patient-ui/labels";
 import { RepositoryProvider } from "@/hooks/repository-context";
@@ -24,14 +26,15 @@ import { getBrowserClient } from "@/lib/supabase/browser";
 import { admissionsOf, questionsOf, recordsOf } from "@/lib/selectors";
 import type { Admission, CareMode, HealthRecord, Patient } from "@/types";
 
-export type PatientTab = "home" | "records" | "meds" | "visit" | "share";
+/** records(건강 기록·컨디션)는 메뉴에서 빼고 진료 준비에서 열 수 있게 보존 */
+export type PatientTab = "home" | "meds" | "body" | "share" | "visit" | "records";
 type Tab = PatientTab;
 export const PATIENT_TABS: ShellTab<Tab>[] = [
   { id: "home", label: "홈", icon: House },
-  { id: "meds", label: "내 약", icon: Pill },
+  { id: "meds", label: "나의 약 기록", icon: Pill },
+  { id: "body", label: "내 몸의 반응", icon: HeartPulse },
+  { id: "share", label: "함께 보기", icon: UsersRound },
   { id: "visit", label: "진료 준비", icon: CalendarCheck },
-  { id: "records", label: "건강 기록", icon: ChartNoAxesColumn },
-  { id: "share", label: "보호자 공유", icon: UsersRound },
 ];
 
 /** 로그인 버전 — 환자 (본인 기록만, RLS 적용) */
@@ -90,20 +93,31 @@ export function PatientTabs({
   const admissions = admissionsOf(snapshot, patient.id);
   const rxStore = useRxStore();
   const rx = useRxSnapshot(rxStore);
-  // 홈 → 내 약 이동 시 (처방 상세 열기 · 처방전 등록 바로 시작)
-  const [medsNav, setMedsNav] = useState<{
-    view: MedsView;
-    selected: string | null;
-    importing: boolean;
-    n: number;
-  }>({ view: "current", selected: null, importing: false, n: 0 });
+  // 화면 사이 이동 (홈 → 나의 약 기록 조건·상세, 상세 → 함께 보기 등). n 은 새로 열 때 화면을 초기화하는 키
+  const [medsNav, setMedsNav] = useState<RecordsNav & { n: number }>({ n: 0 });
+  const [bodyNav, setBodyNav] = useState<{ tags: string[]; n: number }>({ tags: [], n: 0 });
+  const [shareNav, setShareNav] = useState<{ record: string | null; n: number }>({ record: null, n: 0 });
+  const [register, setRegister] = useState<{ open: boolean; n: number }>({ open: false, n: 0 });
+  const [notice, setNotice] = useState<string | null>(null);
   const go = (t: Tab) => {
     setTab(t);
     window.scrollTo({ top: 0 });
   };
+  const openMeds = (nav: RecordsNav) => {
+    setNotice(null);
+    setMedsNav((c) => ({ ...nav, n: c.n + 1 }));
+    go("meds");
+  };
+  const openRegister = () => setRegister((c) => ({ open: true, n: c.n + 1 }));
+  const openShare = (record: string | null) => {
+    setShareNav((c) => ({ record, n: c.n + 1 }));
+    go("share");
+  };
+
+  let body: React.ReactNode;
   switch (tab) {
     case "records":
-      return (
+      body = (
         <PatientRecordsView
           patient={patient}
           records={records}
@@ -113,57 +127,96 @@ export function PatientTabs({
           sub="필요할 때 컨디션 기록을 열어 봐요."
         />
       );
+      break;
     case "meds":
-      return (
-        <MyMedsView
+      body = (
+        <MedRecordsView
           key={medsNav.n}
           snapshot={snapshot}
           rx={rx}
           rxStore={rxStore}
           patient={patient}
           repo={repo}
-          today={today}
-          demo={demo}
-          initialView={medsNav.view}
-          initialSelected={medsNav.selected}
-          startImport={medsNav.importing}
+          initial={medsNav}
+          notice={notice}
+          onRegister={openRegister}
+          onShare={(id) => openShare(id)}
         />
       );
+      break;
+    case "body":
+      body = (
+        <BodyView
+          key={bodyNav.n}
+          rx={rx}
+          initialTags={bodyNav.tags}
+          onOpenRecord={(id) => openMeds({ view: "records", record: id })}
+          onOpenItem={(id) => openMeds({ item: id })}
+          onRegister={openRegister}
+        />
+      );
+      break;
     case "visit":
-      return <VisitPrepView patient={patient} records={records} questions={questionsOf(snapshot, patient.id)} today={today} repo={repo} rx={rx} />;
+      body = (
+        <VisitPrepView
+          patient={patient}
+          records={records}
+          questions={questionsOf(snapshot, patient.id)}
+          today={today}
+          repo={repo}
+          rx={rx}
+          onRecords={() => go("records")}
+        />
+      );
+      break;
     case "share":
-      return <ShareView snapshot={snapshot} patientId={patient.id} repo={repo} />;
+      body = <TogetherView key={shareNav.n} snapshot={snapshot} rx={rx} rxStore={rxStore} patientId={patient.id} repo={repo} presetRecord={shareNav.record} />;
+      break;
     default:
-      return (
+      body = (
         <RxHome
           snapshot={snapshot}
           rx={rx}
+          rxStore={rxStore}
           patient={patient}
           repo={repo}
           today={today}
-          demo={demo}
-          goMeds={(id) => {
-            setMedsNav((c) => ({
-              view: id ? "history" : "current",
-              selected: id ?? null,
-              importing: false,
-              n: c.n + 1,
-            }));
-            go("meds");
+          onRegister={openRegister}
+          onFind={(filter) => openMeds({ view: "items", filter })}
+          onOpenRecord={(id) => openMeds({ view: "records", record: id })}
+          onOpenItem={(id) => openMeds({ item: id })}
+          onBody={(tags) => {
+            setBodyNav((c) => ({ tags: tags ?? [], n: c.n + 1 }));
+            go("body");
           }}
-          goImport={() => {
-            setMedsNav((c) => ({
-              view: "current",
-              selected: null,
-              importing: true,
-              n: c.n + 1,
-            }));
-            go("meds");
-          }}
-          goRecords={() => go("records")}
+          onVisit={() => go("visit")}
         />
       );
   }
+  return (
+    <>
+      {body}
+      {register.open && (
+        <RegisterSheet
+          key={register.n}
+          open
+          onClose={() => setRegister((c) => ({ ...c, open: false }))}
+          snapshot={snapshot}
+          rx={rx}
+          rxStore={rxStore}
+          repo={repo}
+          patient={patient}
+          demo={demo}
+          onSaved={(id, message) => {
+            setRegister((c) => ({ ...c, open: false }));
+            setMedsNav((c) => ({ view: id ? "records" : "items", record: id, n: c.n + 1 }));
+            setNotice(message);
+            go("meds");
+          }}
+        />
+      )}
+    </>
+  );
 }
 
 /**

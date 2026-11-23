@@ -12,6 +12,7 @@ function fake(opts: { missing?: boolean }) {
     const b: Record<string, unknown> = {
       select: () => b,
       order: () => b,
+      limit: () => b,
       eq: () => b,
       update: (args: unknown) => (calls.push({ table, args }), b),
       insert: (args: unknown) => (calls.push({ table, args }), b),
@@ -46,7 +47,7 @@ function fake(opts: { missing?: boolean }) {
   return { client, calls };
 }
 
-describe("처방 이력 — 로그인 버전 저장소", () => {
+describe("약 기록 — 로그인 버전 저장소", () => {
   it("DB에 처방 이력 구조가 없으면 사용 불가로 알리고 쓰기는 거부 (기존 기능은 그대로)", async () => {
     const { client } = fake({ missing: true });
     const s = createSupabaseRxStore(client);
@@ -93,16 +94,56 @@ describe("처방 이력 — 로그인 버전 저장소", () => {
       ],
     });
     expect(id).toBe("rx-new");
-    const rpc = calls.find((c) => c.fn === "create_prescription")!.args as Record<string, unknown>;
+    const rpc = calls.find((c) => c.fn === "create_med_record")!.args as Record<string, unknown>;
     expect(rpc).toMatchObject({
       p_patient_id: "p1",
       p_request_id: "11111111-1111-4111-8111-111111111111",
       p_department: "내과",
+      p_kind: "prescription",
+      p_source: "prescription",
     });
     expect((rpc.p_items as Record<string, unknown>[])[0]).toMatchObject({
       caution_mfds: "(가상)",
       external_item_seq: "200000001",
       active: true,
     });
+  });
+
+  it("일반약 등록: kind·source·제품 정보·분류를 DB 이름으로, 분류가 없으면 '미분류'", async () => {
+    const { client, calls } = fake({});
+    const s = createSupabaseRxStore(client);
+    await s.load();
+    await s.createPrescription({
+      requestId: "22222222-2222-4222-8222-222222222222",
+      patientId: "p1",
+      kind: "otc",
+      source: "otc_box",
+      prescribedOn: "2026-11-22",
+      department: "",
+      clinic: "",
+      guidance: "",
+      items: [
+        {
+          name: "가상진통정",
+          strength: "500mg",
+          ingredients: "아세트아미노펜",
+          categories: ["pain"],
+          categorySource: "mfds",
+          dosage: "",
+          frequency: "",
+          timing: "",
+          duration: "",
+          cautionRx: "",
+          cautionMfds: "",
+          active: false,
+        },
+        { name: "가상약", strength: "", dosage: "", frequency: "", timing: "", duration: "", cautionRx: "", cautionMfds: "", active: false },
+      ],
+    });
+    const rpc = calls.filter((c) => c.fn === "create_med_record").at(-1)!.args as Record<string, unknown>;
+    expect(rpc).toMatchObject({ p_kind: "otc", p_source: "otc_box" });
+    const items = rpc.p_items as Record<string, unknown>[];
+    expect(items[0]).toMatchObject({ ingredients: "아세트아미노펜", categories: ["pain"], category_source: "mfds", active: false });
+    expect(items[1]).toMatchObject({ categories: ["unclassified"], category_source: "none" });
   });
 });

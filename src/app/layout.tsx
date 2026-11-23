@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "CareLog 케어로그 (프로토타입)",
+  title: "FeelPill (가칭) · 내 약 복용 경험 기록 (프로토타입)",
   description: "통원·입원 환자를 위한 통합 건강기록 및 의료 소통 웹앱 프로토타입 — 가상 데이터 시연용",
 };
 

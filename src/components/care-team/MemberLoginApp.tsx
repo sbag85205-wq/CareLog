@@ -22,7 +22,7 @@ export function MemberLoginApp() {
       <main className="mx-auto w-full max-w-md px-5 pt-8 pb-10 lg:pt-16">
         <PCard className="!p-0 lg:!p-10 max-lg:!border-0 max-lg:!bg-transparent">
           <div className="relative">
-            <Wordmark sub="케어로그" />
+            <Wordmark sub="(가칭)" />
             <h1 className="mt-10 text-[1.85rem] leading-snug font-extrabold tracking-tight text-ink">
               보호자·의료진·관리자
               <br />

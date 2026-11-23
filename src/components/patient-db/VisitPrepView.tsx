@@ -1,14 +1,25 @@
 "use client";
 
-import { Pencil, Plus, Presentation, Trash2 } from "lucide-react";
+import { ChartNoAxesColumn, FileText, Pencil, Plus, Presentation, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { PageTitle } from "@/components/patient-ui/AppShell";
 import { Alert, CardHeading, cn, Notice, PButton, PCard, SoftSheet, StatusPill, Switch, TextField } from "@/components/patient-ui/kit";
 import { VisitShow } from "@/components/rx/RxDetail";
+import { VisitSummary } from "@/components/rx/VisitSummary";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { addDays, diffDays, formatDateTime, formatLongKoreanDate } from "@/lib/date";
 import type { SupabaseRepository } from "@/lib/repository/supabase";
-import { itemsOf, prescriptionLabel, sortPrescriptions, type RxSnapshot } from "@/lib/rx/model";
+import {
+  activeItems,
+  experienceSentence,
+  howToTake,
+  isDiscomfortTag,
+  itemsOf,
+  noteDate,
+  prescriptionLabel,
+  sortPrescriptions,
+  type RxSnapshot,
+} from "@/lib/rx/model";
 import { summarizeRecent } from "@/lib/visit-summary";
 import type { HealthRecord, Patient, VisitQuestion } from "@/types";
 
@@ -20,6 +31,7 @@ export function VisitPrepView({
   today,
   repo,
   rx,
+  onRecords,
 }: {
   patient: Patient;
   records: HealthRecord[];
@@ -27,9 +39,19 @@ export function VisitPrepView({
   today: string;
   repo: SupabaseRepository;
   rx?: RxSnapshot | null;
+  /** 건강 기록(컨디션) 화면 열기 */
+  onRecords?: () => void;
 }) {
   const [showId, setShowId] = useState<string | null>(null);
-  const recent = rx?.available ? sortPrescriptions(rx.prescriptions).slice(0, 3) : [];
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const active = rx?.available ? activeItems(rx) : [];
+  const discomfort = rx?.available
+    ? [...rx.notes]
+        .filter((n) => n.tags.some(isDiscomfortTag))
+        .sort((a, b) => noteDate(b).localeCompare(noteDate(a)))
+        .slice(0, 3)
+    : [];
+  const recent = rx?.available ? sortPrescriptions(rx.prescriptions).slice(0, 4) : [];
   const shown = rx?.prescriptions.find((p) => p.id === showId);
   const s = summarizeRecent(records, 14, today);
   const thisWeek = summarizeRecent(records, 7, today);
@@ -38,13 +60,23 @@ export function VisitPrepView({
 
   return (
     <div className="space-y-5">
-      <PageTitle title="진료 준비" sub="궁금한 점을 미리 모아 두세요." />
+      <PageTitle
+        title="진료 준비"
+        sub="지금 먹는 약, 지난 처방, 기억해 둔 경험과 질문을 모아 진료실에서 바로 보여 줘요."
+        action={
+          rx?.available ? (
+            <PButton size="md" icon={FileText} onClick={() => setSummaryOpen(true)}>
+              진료용 요약 · 인쇄
+            </PButton>
+          ) : undefined
+        }
+      />
       <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
         <div className="space-y-5">
           <NextVisitCard patient={patient} today={today} repo={repo} />
           {rx && (
             <PCard aria-labelledby="show-title">
-              <CardHeading id="show-title" title="진료 때 보여주기" sub="처방·당시 약·복용 경험·질문을 한 화면으로 보여 줘요." />
+              <CardHeading id="show-title" title="진료 때 보여주기 · 이전 처방 이력" sub="처방·당시 약·복용 경험·질문을 한 화면으로 보여 줘요." />
               {!rx.available ? (
                 <Notice>{rx.message}</Notice>
               ) : recent.length === 0 ? (
@@ -63,6 +95,46 @@ export function VisitPrepView({
                       </button>
                     </li>
                   ))}
+                </ul>
+              )}
+            </PCard>
+          )}
+          {rx?.available && (
+            <PCard aria-labelledby="cur-title">
+              <CardHeading id="cur-title" title="현재 복용 중이라고 기록한 약" sub="제품명·성분·복용 방법은 사용자가 확인해 저장한 내용이에요." />
+              {active.length === 0 ? (
+                <p className="text-sm text-ink-soft">지금 복용 중으로 표시한 약이 없어요.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {active.map(({ item: i }) => (
+                    <li key={i.id} className="rounded-2xl bg-ivory p-3 text-sm">
+                      <p className="font-bold text-ink">{i.name}</p>
+                      {i.ingredients && <p className="text-ink-soft">성분 {i.ingredients}</p>}
+                      <p className="text-ink-soft">
+                        {howToTake(i)}
+                        {i.duration && ` · ${i.duration}`}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </PCard>
+          )}
+          {rx?.available && (
+            <PCard aria-labelledby="bad-title">
+              <CardHeading id="bad-title" title="기억해 둔 불편 경험" sub="환자가 직접 남긴 경험 — 원인 약물은 확인되지 않은 기록이에요." />
+              {discomfort.length === 0 ? (
+                <p className="text-sm text-ink-soft">남긴 불편 경험이 없어요.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {discomfort.map((n) => {
+                    const p = rx.prescriptions.find((x) => x.id === n.prescriptionId);
+                    return p ? (
+                      <li key={n.id} className="rounded-2xl bg-ivory p-3 text-sm text-ink">
+                        {experienceSentence(p, n, rx.items.find((i) => i.id === n.itemId)?.name)}
+                      </li>
+                    ) : null;
+                  })}
                 </ul>
               )}
             </PCard>
@@ -87,12 +159,20 @@ export function VisitPrepView({
               <Row label="자주 기록한 증상" value={s.topSymptoms.length ? s.topSymptoms.map(([n, c]) => `${n} ${c}일`).join(" · ") : "없음"} />
             </dl>
             <p className="mt-3 text-xs text-ink-soft">진료 때 이 요약을 의료진에게 보여 주세요. 의료적 판단은 의료진과 상담해 주세요.</p>
+            {onRecords && (
+              <PButton size="sm" variant="ghost" icon={ChartNoAxesColumn} className="mt-2" onClick={onRecords}>
+                컨디션 기록 열기
+              </PButton>
+            )}
           </PCard>
         </div>
         <QuestionsCard patientId={patient.id} questions={questions} repo={repo} rx={rx} />
       </div>
       <SoftSheet open={Boolean(shown)} title="진료 때 보여주기" onClose={() => setShowId(null)}>
         {shown && rx && <VisitShow p={shown} snapshot={rx} questions={questions} repo={repo} />}
+      </SoftSheet>
+      <SoftSheet open={summaryOpen} title="진료용 요약" onClose={() => setSummaryOpen(false)}>
+        {summaryOpen && rx?.available && <VisitSummary rx={rx} patient={patient} questions={questions} today={today} />}
       </SoftSheet>
     </div>
   );

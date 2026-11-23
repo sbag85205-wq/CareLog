@@ -38,7 +38,7 @@ export function InviteAcceptApp() {
     <div className="min-h-dvh bg-ivory text-ink">
       <main className="mx-auto w-full max-w-md px-5 pt-8 pb-10 lg:pt-16">
         <PCard className="!p-0 lg:!p-10 max-lg:!border-0 max-lg:!bg-transparent">
-          <Wordmark sub="케어로그" />
+          <Wordmark sub="(가칭)" />
           <h1 className="mt-8 text-[1.85rem] leading-snug font-extrabold tracking-tight text-ink">보호자 초대</h1>
           <p className="mt-3 text-ink-soft">환자가 공유한 항목을 읽기 전용으로 볼 수 있어요. 공유는 환자가 언제든 바꾸거나 멈출 수 있어요.</p>
 

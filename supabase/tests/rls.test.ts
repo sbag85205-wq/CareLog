@@ -403,7 +403,7 @@ describe("C. SECURITY DEFINER·실행 권한 점검 (카탈로그 검사)", () =
        from pg_class c join pg_namespace n on n.oid = c.relnamespace
        where n.nspname = 'public' and c.relkind = 'r'`,
     );
-    expect(rows).toHaveLength(19); // migration 9: admin_users, migration 10: 처방 이력 3개
+    expect(rows).toHaveLength(21); // migration 9: admin_users, 10: 처방 이력 3개, 11: intake_logs·record_shares
     expect(rows.filter((r) => !r.rls)).toEqual([]);
     expect(rows.filter((r) => r.anon)).toEqual([]);
   });

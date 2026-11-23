@@ -10,7 +10,7 @@ with
       and c.relname in ('profiles', 'patients', 'admissions', 'staff_assignments', 'guardian_invitations',
                         'access_grants', 'health_records', 'medications', 'drug_info_cache', 'visit_questions',
                         'meal_menus', 'meal_logs', 'life_requests', 'staff_reviews', 'staff_review_notes', 'admin_users',
-                        'prescriptions', 'prescription_items', 'prescription_notes')
+                        'prescriptions', 'prescription_items', 'prescription_notes', 'intake_logs', 'record_shares')
   ),
   fn as (
     select p.oid, n.nspname || '.' || p.proname as name, p.prosecdef, p.proconfig
@@ -20,11 +20,11 @@ with
 select check_name, ok, detail
 from (
   values
-    ('carelog_tables_19', (select count(*) = 19 from tbl), (select count(*)::text from tbl)),
+    ('carelog_tables_21', (select count(*) = 21 from tbl), (select count(*)::text from tbl)),
     ('rls_enabled_all', not exists (select 1 from tbl where not relrowsecurity),
       (select coalesce(string_agg(relname, ', '), '없음') from tbl where not relrowsecurity)),
-    -- migration 5(28개) + 8(4개) + 9(1개, admin_users) + 10(10개, 처방 이력)의 정책 수와 정확히 일치해야 함
-    ('policies_count_43', (select count(*) = 43 from pg_policies where schemaname = 'public'),
+    -- migration 5(28개) + 8(4개) + 9(1개, admin_users) + 10(10개, 처방 이력) + 11(4개, 복용 체크 3·선택 공유 1)의 정책 수와 정확히 일치해야 함
+    ('policies_count_47', (select count(*) = 47 from pg_policies where schemaname = 'public'),
       (select count(*)::text from pg_policies where schemaname = 'public')),
     ('anon_no_table_privileges',
       not exists (select 1 from tbl where has_table_privilege('anon', oid, 'select,insert,update,delete')),

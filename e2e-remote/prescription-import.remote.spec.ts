@@ -73,8 +73,9 @@ async function mockSearch(page: Page, sent: unknown[]) {
 }
 
 async function openImport(page: Page) {
-  await menu(page, "내 약").click();
-  await page.getByRole("button", { name: "처방전 등록" }).first().click();
+  await menu(page, "나의 약 기록").click();
+  await page.getByRole("button", { name: "약 등록하기" }).first().click();
+  await page.getByRole("dialog", { name: "약 등록하기" }).getByRole("button", { name: /^처방전 촬영·업로드/ }).click();
   return page.getByRole("dialog", { name: "처방전 등록" });
 }
 
@@ -176,7 +177,7 @@ test("보호자 공유: 처방전으로 등록한 약은 기본 비공개, 환�
   expect((await sg.from("medications").select("name").eq("patient_id", P1.pid)).data).toEqual([]);
   const page = await newPage(browser);
   await patientLogin(page, P1);
-  await menu(page, "내 약").click();
+  await menu(page, "나의 약 기록").click();
   await page.getByRole("region", { name: "케어가상코프시럽(가상성분)" }).getByRole("switch", { name: "보호자에게 공개" }).click();
   await expect(page.getByRole("region", { name: "케어가상코프시럽(가상성분)" }).getByRole("switch", { name: "보호자에게 공개" })).toHaveAttribute("aria-checked", "true");
   expect((await sg.from("medications").select("name").eq("patient_id", P1.pid)).data).toEqual([{ name: "케어가상코프시럽(가상성분)" }]);

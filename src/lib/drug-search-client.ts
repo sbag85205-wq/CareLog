@@ -12,6 +12,8 @@ export interface DrugItem {
   ingredient: string;
   category: string;
   productType: string;
+  /** 약효 분류 원문 (예: "[01140]해열.진통.소염제") */
+  classRaw?: string;
   permitDate: string;
   canceled: boolean;
   /** 보험코드 (EDI_CODE, 여러 개면 쉼표) */
@@ -70,4 +72,35 @@ const DrugCautionContext = createContext<DrugCautionFn>(apiDrugCaution);
 export const DrugCautionProvider = DrugCautionContext.Provider;
 export function useDrugCaution(): DrugCautionFn {
   return useContext(DrugCautionContext);
+}
+
+/** 식약처 e약은요 개요 정보 — 서버만 외부 호출, 품목기준코드만 전송 (데모는 가상 함수 주입) */
+export interface EasyInfo {
+  efficacy: string;
+  usage: string;
+  beforeUse: string;
+  caution: string;
+}
+export type DrugEasyInfoFn = (itemSeq: string) => Promise<{ ok: true; info: EasyInfo; demo?: boolean } | { ok: false; message: string }>;
+
+export const apiDrugEasyInfo: DrugEasyInfoFn = async (itemSeq) => {
+  try {
+    const res = await fetch("/api/medications/easy-info", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemSeq }),
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    const r = (await res.json()) as { ok: boolean; info?: EasyInfo; message?: string };
+    return r.ok && r.info ? { ok: true, info: r.info } : { ok: false, message: r.message ?? "식약처 개요 정보를 가져오지 못했어요." };
+  } catch {
+    return { ok: false, message: "식약처 개요 정보를 가져오지 못했어요." };
+  }
+};
+
+const DrugEasyInfoContext = createContext<DrugEasyInfoFn>(apiDrugEasyInfo);
+export const DrugEasyInfoProvider = DrugEasyInfoContext.Provider;
+export function useDrugEasyInfo(): DrugEasyInfoFn {
+  return useContext(DrugEasyInfoContext);
 }

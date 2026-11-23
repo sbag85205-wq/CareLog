@@ -104,19 +104,16 @@ describe("복용 경험·별표·진료 질문", () => {
 });
 
 describe("보호자·의료진·다른 환자", () => {
-  it("보호자: 환자가 처방 공유를 켜고 '약 정보' 범위가 있을 때만 처방·약·메모 조회", async () => {
+  it("보호자: (migration 11 이후) '보호자 공유'를 켜도 기록 표를 직접 볼 수 없음 — 선택 공유 함수로만", async () => {
     const rx = (await as<{ id: string }>(db, A, "select id from public.prescriptions where patient_id = $1 and department = '이비인후과'", [pidA]))[0].id;
     expect(await count(G, "select 1 from public.prescriptions")).toBe(0);
-    await as(db, A, "update public.prescriptions set visible_to_guardian = true where id = $1", [rx]);
-    expect(await count(G, "select 1 from public.prescriptions")).toBe(1);
-    expect(await count(G, "select 1 from public.prescription_items")).toBe(2);
-    expect(await count(G, "select 1 from public.prescription_notes")).toBe(2);
-    expect(await count(G2, "select 1 from public.prescriptions")).toBe(0); // '건강기록'만 공유받은 보호자
-    expect(await as(db, G, "update public.prescriptions set starred = false where id = $1 returning id", [rx])).toEqual([]); // 읽기 전용
-    // 공유 철회 → 즉시 0건
-    const grant = (await as<{ id: string }>(db, A, "select id from public.access_grants where grantee_id = $1", [G.id]))[0].id;
-    await as(db, A, "select public.revoke_guardian_access($1)", [grant]);
+    await as(db, A, "update public.prescriptions set visible_to_guardian = true where id = $1", [rx]); // 이전 값은 저장·보존
+    expect(await count(G, "select 1 from public.prescriptions")).toBe(0);
+    expect(await count(G, "select 1 from public.prescription_items")).toBe(0);
     expect(await count(G, "select 1 from public.prescription_notes")).toBe(0);
+    expect(await count(G2, "select 1 from public.prescriptions")).toBe(0);
+    expect(await as(db, G, "update public.prescriptions set starred = false where id = $1 returning id", [rx])).toEqual([]); // 읽기 전용
+    await as(db, A, "update public.prescriptions set visible_to_guardian = false where id = $1", [rx]);
   });
 
   it("담당 간호사만 조회, 비담당·다른 환자는 0건", async () => {

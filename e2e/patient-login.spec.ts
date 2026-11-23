@@ -93,5 +93,5 @@ test("배포 주소(/) → 로그인 전에는 /login, 기존 데모는 /demo", 
   await expect(page.getByLabel("아이디")).toBeVisible();
   await page.getByRole("link", { name: "가상 데이터 데모" }).click();
   await expect(page).toHaveURL(/\/demo$/);
-  await expect(page.getByText("님, 안녕하세요").first()).toBeVisible();
+  await expect(page.getByText("나한테 어땠더라?").first()).toBeVisible();
 });

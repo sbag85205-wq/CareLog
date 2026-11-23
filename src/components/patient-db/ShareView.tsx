@@ -26,7 +26,7 @@ const toggle = (list: AccessScope[], s: AccessScope) => (list.includes(s) ? list
  * 보호자 공유 — 환자가 초대하고 공유 항목을 선택·변경·철회
  * 실제 차단은 DB(RLS)가 담당: 철회·범위 축소 즉시 보호자 조회 결과에서 빠짐
  */
-export function ShareView({ snapshot, patientId, repo }: { snapshot: DbSnapshot; patientId: string; repo: SupabaseRepository }) {
+export function ShareView({ snapshot, patientId, repo, embedded }: { snapshot: DbSnapshot; patientId: string; repo: SupabaseRepository; embedded?: boolean }) {
   const [email, setEmail] = useState("");
   const [scopes, setScopes] = useState<AccessScope[]>(["records"]);
   const [link, setLink] = useState<{
@@ -48,10 +48,18 @@ export function ShareView({ snapshot, patientId, repo }: { snapshot: DbSnapshot;
 
   return (
     <div className="space-y-5">
-      <PageTitle title="보호자 공유" sub="공유할 항목을 고르고 언제든 바꾸거나 멈출 수 있어요." />
+      {!embedded && <PageTitle title="보호자 공유" sub="공유할 항목을 고르고 언제든 바꾸거나 멈출 수 있어요." />}
       <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
         <PCard aria-labelledby="invite-title">
-          <CardHeading id="invite-title" title="보호자 초대" sub="보호자 계정의 이메일로 초대 링크를 만들어요. 링크는 보호자에게 직접 전해 주세요." />
+          <CardHeading
+            id="invite-title"
+            title={embedded ? "함께 볼 사람 초대" : "보호자 초대"}
+            sub={
+              embedded
+                ? "가족·연인·친구·보호자의 계정 이메일로 초대 링크를 만들어요. 링크는 직접 전해 주세요."
+                : "보호자 계정의 이메일로 초대 링크를 만들어요. 링크는 보호자에게 직접 전해 주세요."
+            }
+          />
           <form
             className="space-y-5"
             onSubmit={async (e) => {
@@ -126,7 +134,7 @@ export function ShareView({ snapshot, patientId, repo }: { snapshot: DbSnapshot;
 
         <div className="space-y-5">
           <PCard aria-labelledby="grant-title">
-            <CardHeading id="grant-title" title="공유 중인 보호자" />
+            <CardHeading id="grant-title" title={embedded ? "연결된 사람 · 기본 공유 범위" : "공유 중인 보호자"} />
             <Alert>{list.error}</Alert>
             {active.length === 0 ? (
               <p className="text-sm text-ink-soft">아직 공유 중인 보호자가 없어요.</p>

@@ -137,7 +137,7 @@ export async function patientLogin(page: Page, v: VPatient, password = v.passwor
   await typeSecret(page.getByLabel("비밀번호", { exact: true }), password);
   await page.getByRole("button", { name: "로그인", exact: true }).click();
   await expect(page).toHaveURL(/\/my$/);
-  await expect(page.getByRole("heading", { name: `${v.name} 님, 안녕하세요.` })).toBeVisible();
+  await expect(page.getByText(`${v.name} 님의 약 기록`)).toBeVisible();
 }
 
 /** 보호자·의료진 로그인 폼 (이메일 + 비밀번호) */

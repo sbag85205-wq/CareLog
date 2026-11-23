@@ -27,11 +27,11 @@ export async function setDevFlags(page: Page, flags: { latencyMs?: number; failW
   }, flags);
 }
 
-/** 공개 데모(/demo) 열기 — 로그인 없이 환자 홈 */
+/** 공개 데모(/demo) 열기 — 로그인 없이 홈 ("그때 먹었던 약, 나한테 어땠더라?") */
 export async function openApp(page: Page) {
   await hideDevOverlay(page);
   await page.goto("/demo", { waitUntil: "networkidle" });
-  await page.getByText("님, 안녕하세요").first().waitFor();
+  await page.getByText("나한테 어땠더라?").first().waitFor();
 }
 
 export async function expectNoHorizontalOverflow(page: Page) {
@@ -51,9 +51,9 @@ export async function switchMode(page: Page, mode: "통원" | "입원") {
   await expect(page.getByText(`${mode} 중`, { exact: true })).toBeVisible();
 }
 
-export async function switchRole(page: Page, role: "환자" | "의료진" | "보호자") {
-  await page.getByRole("tablist", { name: "데모 역할" }).getByRole("tab", { name: role }).click();
-  await expect(page.getByRole("tablist", { name: "데모 역할" }).getByRole("tab", { name: role })).toHaveAttribute("aria-selected", "true");
+export async function switchRole(page: Page, role: "나" | "의료진" | "함께 보는 사람") {
+  await page.getByRole("tablist", { name: "데모 역할" }).getByRole("tab", { name: role, exact: true }).click();
+  await expect(page.getByRole("tablist", { name: "데모 역할" }).getByRole("tab", { name: role, exact: true })).toHaveAttribute("aria-selected", "true");
 }
 
 /** 개발 서버의 Next.js 개발 도구 배지가 모바일 하단 메뉴(홈)를 가리지 않게 숨김 (테스트 전용) */

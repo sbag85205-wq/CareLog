@@ -8,6 +8,7 @@
 import { ArrowRight, Check, type LucideIcon } from "lucide-react";
 import { useId, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from "react";
 import { cn } from "@/components/ui/primitives";
+import { BRAND } from "@/lib/brand";
 
 export { cn };
 
@@ -16,7 +17,7 @@ export { cn };
 export function Wordmark({ sub, className }: { sub?: string; className?: string }) {
   return (
     <div className={cn("flex items-baseline gap-2", className)}>
-      <span className="text-[1.65rem] font-extrabold tracking-tight text-sage-700">CareLog</span>
+      <span className="text-[1.65rem] font-extrabold tracking-tight text-sage-700">{BRAND.name}</span>
       {sub && <span className="text-sm text-ink-soft">{sub}</span>}
     </div>
   );

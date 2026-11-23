@@ -55,7 +55,7 @@ export function PatientLoginApp() {
       <div className="mx-auto grid min-h-dvh max-w-6xl lg:grid-cols-[1fr_minmax(0,30rem)] lg:items-center lg:gap-12 lg:px-10 lg:py-10">
         {/* PC: 왼쪽 소개 */}
         <section className="relative hidden h-full max-h-[44rem] overflow-hidden rounded-[2.5rem] bg-sage-100 p-12 lg:flex lg:flex-col" aria-hidden>
-          <Wordmark sub="케어로그" />
+          <Wordmark sub="(가칭)" />
           <p className="mt-auto text-[2.6rem] leading-[1.25] font-extrabold tracking-tight text-sage-900">
             오늘의 나를,
             <br />
@@ -78,7 +78,7 @@ export function PatientLoginApp() {
         <main className="px-5 pt-8 pb-10 sm:mx-auto sm:w-full sm:max-w-md lg:max-w-none lg:px-0 lg:py-0">
           <PCard className="!p-0 lg:!p-10 lg:shadow-[0_8px_30px_rgba(38,63,51,0.06)] max-lg:!border-0 max-lg:!bg-transparent">
             <div className="relative">
-              <Wordmark sub="케어로그" className="lg:hidden" />
+              <Wordmark sub="(가칭)" className="lg:hidden" />
               <h1 className="mt-10 text-[1.85rem] leading-snug font-extrabold tracking-tight text-ink lg:mt-0">
                 <span className="lg:hidden">
                   오늘의 나를,

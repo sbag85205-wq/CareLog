@@ -2,10 +2,9 @@
 
 import { Star } from "lucide-react";
 import { useState } from "react";
-import { ChipGroup, cn, PCard, StatusPill, Switch } from "@/components/patient-ui/kit";
+import { ChipGroup, cn, PCard, Switch } from "@/components/patient-ui/kit";
 import type { SupabaseRepository } from "@/lib/repository/supabase";
 import {
-  EXPERIENCE_TAGS,
   filterPrescriptions,
   itemsOf,
   notesOf,
@@ -13,11 +12,13 @@ import {
   usedDepartments,
   usedTags,
   type Prescription,
+  type RxFilter,
   type RxSnapshot,
 } from "@/lib/rx/model";
 import type { RxStore } from "@/lib/rx/store";
 import type { VisitQuestion } from "@/types";
 import { RxDetail } from "./RxDetail";
+import { KindPill, TagPills } from "./RxParts";
 
 const toggle = (list: string[], t: string) => (list.includes(t) ? list.filter((x) => x !== t) : [...list, t]);
 
@@ -32,6 +33,9 @@ export function RxHistory({
   questions,
   readOnly,
   initialSelected,
+  filter,
+  onOpenItem,
+  onShare,
 }: {
   snapshot: RxSnapshot;
   store: RxStore | null;
@@ -39,17 +43,25 @@ export function RxHistory({
   questions: VisitQuestion[];
   readOnly?: boolean;
   initialSelected?: string | null;
+  /** 바깥(나의 약 기록)에서 정한 찾기 조건 — 있으면 이 화면의 찾기 상자는 숨김 */
+  filter?: RxFilter;
+  onOpenItem?: (itemId: string) => void;
+  onShare?: (prescriptionId: string) => void;
 }) {
   const [department, setDepartment] = useState("");
   const [starredOnly, setStarredOnly] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | null>(initialSelected ?? null);
 
-  const list = filterPrescriptions(snapshot, {
-    department: department || undefined,
-    starredOnly,
-    tags,
-  });
+  const list = filterPrescriptions(
+    snapshot,
+    filter ?? {
+      department: department || undefined,
+      starredOnly,
+      tags,
+    },
+  );
+  const external = Boolean(filter);
   const inDept = filterPrescriptions(snapshot, {
     department: department || undefined,
   });
@@ -62,7 +74,9 @@ export function RxHistory({
   if (snapshot.prescriptions.length === 0) {
     return (
       <PCard tone="ivory">
-        <p className="text-ink-soft">{readOnly ? "공유받은 처방이 없어요." : "아직 등록한 처방이 없어요. ‘처방전 등록’으로 처방전을 불러와 보세요."}</p>
+        <p className="text-ink-soft">
+          {readOnly ? "공유받은 기록이 없어요." : "아직 등록한 기록이 없어요. ‘약 등록하기’로 처방전이나 일반약을 등록해 보세요."}
+        </p>
       </PCard>
     );
   }
@@ -70,52 +84,54 @@ export function RxHistory({
   return (
     <div className="lg:grid lg:grid-cols-[22rem_minmax(0,1fr)] lg:items-start lg:gap-6">
       <div className={cn("space-y-4", current && "hidden lg:block")}>
-        <PCard className="space-y-3 !p-4" aria-label="처방 찾기">
-          <div>
-            <p className="mb-1.5 text-xs font-bold text-ink-soft">진료과</p>
-            <ChipGroup
-              ariaLabel="진료과"
-              value={department}
-              onChange={(d) => {
-                setDepartment(d);
-                setTags([]);
-              }}
-              options={[
-                { value: "", label: "전체" },
-                ...usedDepartments(snapshot).map((d) => ({
-                  value: d,
-                  label: d,
-                })),
-              ]}
-            />
-          </div>
-          <Switch label="★ 보관한 처방만" checked={starredOnly} onChange={setStarredOnly} />
-          {tagOptions.length > 0 && (
+        {!external && (
+          <PCard className="space-y-3 !p-4" aria-label="처방 찾기">
             <div>
-              <p className="mb-1.5 text-xs font-bold text-ink-soft">복용 경험 태그</p>
+              <p className="mb-1.5 text-xs font-bold text-ink-soft">진료과</p>
               <ChipGroup
-                ariaLabel="복용 경험 태그"
-                value={tags}
-                onChange={(t) => setTags((c) => toggle(c, t))}
-                options={tagOptions.map((t) => ({ value: t, label: t }))}
+                ariaLabel="진료과"
+                value={department}
+                onChange={(d) => {
+                  setDepartment(d);
+                  setTags([]);
+                }}
+                options={[
+                  { value: "", label: "전체" },
+                  ...usedDepartments(snapshot).map((d) => ({
+                    value: d,
+                    label: d,
+                  })),
+                ]}
               />
             </div>
-          )}
-        </PCard>
+            <Switch label="★ 보관한 처방만" checked={starredOnly} onChange={setStarredOnly} />
+            {tagOptions.length > 0 && (
+              <div>
+                <p className="mb-1.5 text-xs font-bold text-ink-soft">복용 경험 태그</p>
+                <ChipGroup
+                  ariaLabel="복용 경험 태그"
+                  value={tags}
+                  onChange={(t) => setTags((c) => toggle(c, t))}
+                  options={tagOptions.map((t) => ({ value: t, label: t }))}
+                />
+              </div>
+            )}
+          </PCard>
+        )}
 
-        {starred.length > 0 && !starredOnly && (
-          <section aria-label="★ 보관한 처방" className="space-y-2">
-            <h3 className="px-1 text-sm font-bold text-sage-800">★ 보관한 처방</h3>
+        {starred.length > 0 && !starredOnly && !filter?.starredOnly && (
+          <section aria-label="★ 보관한 기록" className="space-y-2">
+            <h3 className="px-1 text-sm font-bold text-sage-800">★ 보관한 기록</h3>
             <RxList list={starred} snapshot={snapshot} selected={desktopShown?.id ?? null} onOpen={setSelected} store={readOnly ? null : store} />
           </section>
         )}
-        <section aria-label="날짜별 처방" className="space-y-2">
+        <section aria-label="날짜별 기록" className="space-y-2">
           <h3 className="px-1 text-sm font-bold text-ink-soft">
-            {starredOnly ? "★ 보관한 처방" : "날짜별 처방"} · {list.length}건
+            {starredOnly || filter?.starredOnly ? "★ 보관한 기록" : "날짜별 기록"} · {list.length}건
           </h3>
           {list.length === 0 ? (
             <PCard tone="ivory" className="!p-4">
-              <p className="text-sm text-ink-soft">조건에 맞는 처방이 없어요.</p>
+              <p className="text-sm text-ink-soft">조건에 맞는 기록이 없어요.</p>
             </PCard>
           ) : (
             <RxList list={list} snapshot={snapshot} selected={desktopShown?.id ?? null} onOpen={setSelected} store={readOnly ? null : store} />
@@ -134,6 +150,8 @@ export function RxHistory({
             questions={questions}
             readOnly={readOnly}
             onBack={() => setSelected(null)}
+            onOpenItem={onOpenItem}
+            onShare={onShare}
           />
         )}
       </div>
@@ -174,15 +192,19 @@ function RxList({
                 selected === p.id ? "border-sage-500 bg-sage-50 lg:shadow-sm" : "border-line bg-white hover:border-sage-300",
               )}
             >
-              <p className="font-bold text-ink">{label}</p>
+              <span className="flex items-center gap-2">
+                <KindPill p={p} />
+                <span className="font-bold text-ink">{label}</span>
+              </span>
               {p.clinic && <p className="text-xs text-ink-soft">{p.clinic}</p>}
+              <p className="mt-0.5 truncate text-xs text-ink-soft">
+                {itemsOf(snapshot, p.id)
+                  .map((i) => i.name)
+                  .join(", ")}
+              </p>
               {tags.length > 0 && (
-                <span className="mt-2 flex flex-wrap gap-1">
-                  {tags.slice(0, 4).map((t) => (
-                    <StatusPill key={t} tone={(EXPERIENCE_TAGS.bad as readonly string[]).includes(t) ? "warn" : "sage"} className="!text-xs">
-                      {t}
-                    </StatusPill>
-                  ))}
+                <span className="mt-2 block">
+                  <TagPills tags={tags.slice(0, 4)} small />
                 </span>
               )}
             </button>

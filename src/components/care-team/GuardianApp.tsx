@@ -11,9 +11,9 @@ import { CONDITION_WORD, SLEEP_WORD } from "@/components/patient-ui/labels";
 import { useDbApp } from "@/hooks/useDbApp";
 import { formatKoreanDate, formatKoreanTime, todayISO } from "@/lib/date";
 import { currentAdmission } from "@/lib/domain/admissions";
-import { RxHistory } from "@/components/rx/RxHistory";
+import { SharedRecordsList } from "@/components/rx/SharedRecords";
 import { FEATURES } from "@/lib/features";
-import { forPatient, type RxSnapshot } from "@/lib/rx/model";
+import { forPatient } from "@/lib/rx/model";
 import { useRxSnapshot, useRxStore, RxStoreProvider } from "@/lib/rx/store";
 import { createSupabaseRxStore } from "@/lib/rx/supabase-store";
 import { getBrowserClient } from "@/lib/supabase/browser";
@@ -32,7 +32,7 @@ export const GUARDIAN_TABS: ShellTab<Tab>[] = [{ id: "home", label: "안부", ic
 export function GuardianApp() {
   const { repo, snapshot, loadState, ready, logout } = useDbApp("guardian");
   const [selected, setSelected] = useState<string | null>(null);
-  // 공유받은 처방 (RLS: 환자가 '보호자와 공유'를 켠 처방 + 약 정보 공유 범위)
+  // 공유받은 약 기록 (DB 함수 shared_records_for_me: 환자가 고른 기록·항목만)
   const rxStore = useMemo(() => (ready ? createSupabaseRxStore(getBrowserClient()!) : null), [ready]);
   useEffect(() => {
     void rxStore?.load();
@@ -138,7 +138,8 @@ function GuardianPatient({ snapshot, patient, scopes }: { snapshot: DbSnapshot; 
       </div>
 
       {FEATURES.WARD && has("meals") && patient.careMode === "inpatient" && <MealsSection snapshot={snapshot} patientId={patient.id} readOnly />}
-      {has("medications") && <SharedRx rx={rx} />}
+      {/* 선택 공유된 약 기록 — 환자가 고른 기록·항목만 (공유 범위와 별개로, 기록마다 따로 공유) */}
+      {rx && (rx.available ? <SharedRecordsList records={rx.shared} /> : null)}
       {has("medications") && (
         <MedicationsView
           medications={medicationsOf(snapshot, patient.id, "guardian")}
@@ -149,28 +150,6 @@ function GuardianPatient({ snapshot, patient, scopes }: { snapshot: DbSnapshot; 
         />
       )}
     </div>
-  );
-}
-
-/** 공유받은 처방 — 읽기 전용 처방 이력 */
-function SharedRx({ rx }: { rx: RxSnapshot | null }) {
-  if (!rx) return null;
-  return (
-    <section aria-labelledby="g-rx" className="space-y-3">
-      <div className="px-1">
-        <h2 id="g-rx" className="text-xl font-bold text-ink">
-          공유된 처방
-        </h2>
-        <p className="text-sm text-ink-soft">환자가 ‘보호자와 공유’를 켠 처방과 복용 경험만 보여요.</p>
-      </div>
-      {rx.available ? (
-        <RxHistory snapshot={rx} store={null} questions={[]} readOnly />
-      ) : (
-        <PCard tone="ivory">
-          <p className="text-sm text-ink-soft">{rx.message}</p>
-        </PCard>
-      )}
-    </section>
   );
 }
 

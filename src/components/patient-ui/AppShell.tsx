@@ -56,7 +56,7 @@ export function AppShell<T extends string>({
       <div className="lg:flex">
       {/* PC: 왼쪽 메뉴 */}
       <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line bg-ivory px-5 py-7 lg:flex">
-        <Wordmark sub="케어로그" />
+        <Wordmark sub="(가칭)" />
         <p className="mt-3 text-sm text-ink-soft">
           <span className="font-bold text-sage-800">{roleLabel}</span>
           {userLabel && <span> · {userLabel}</span>}

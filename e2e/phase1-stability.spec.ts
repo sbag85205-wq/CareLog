@@ -9,8 +9,11 @@ import { menu, openApp, setDevFlags } from "./helpers";
 test("저장 실패: 오류 안내 후 입력한 내용 유지, 실패한 기록은 남지 않음", async ({ page }) => {
   await setDevFlags(page, { failWrites: true });
   await openApp(page);
-  await page.getByRole("button", { name: /^오늘 (컨디션 기록|기록 수정)$/ }).click();
-  const dlg = page.getByRole("dialog", { name: "오늘 컨디션 기록" });
+  // 컨디션 기록은 진료 준비 → 컨디션 기록 열기 (메뉴에서는 빠졌지만 기능은 보존)
+  await menu(page, "진료 준비").click();
+  await page.getByRole("button", { name: "컨디션 기록 열기" }).click();
+  await page.getByRole("button", { name: /^이 날짜 (기록하기|의 기록 수정)$/ }).click();
+  const dlg = page.getByRole("dialog", { name: /기록 (작성|수정)$/ });
   await dlg.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^2점/ }).click();
   await dlg.getByRole("group", { name: "피로도" }).getByRole("button").nth(1).click();
   await dlg.getByRole("group", { name: "수면 상태" }).getByRole("button").nth(1).click();

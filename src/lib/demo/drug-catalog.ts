@@ -23,6 +23,57 @@ export const DEMO_DRUG_CATALOG: DrugItem[] = [
   item({ itemSeq: "900000031", name: "케어가상코프시럽(가상성분)", company: "가상헬스" }),
   item({ itemSeq: "900000041", name: "케어가상서방정150밀리그램", company: "가상제약(주)", category: "전문의약품" }),
   item({ itemSeq: "900000042", name: "케어가상정500밀리그램(구 제품)", company: "가상제약(주)", canceled: true, permitDate: "20050101" }),
+  // 일반약 (FeelPill 데모 — 상자·영수증·직접 검색). 같은 이름·다른 회사 제품을 일부러 둠 → 사용자가 골라야 함
+  item({
+    itemSeq: "900000101",
+    name: "가상진통정500밀리그램",
+    company: "가상제약(주)",
+    ingredient: "아세트아미노펜",
+    productType: "해열.진통.소염제",
+    classRaw: "[01140]해열.진통.소염제",
+  }),
+  item({
+    itemSeq: "900000106",
+    name: "가상진통정500밀리그램",
+    company: "다른가상약품",
+    ingredient: "아세트아미노펜",
+    productType: "해열.진통.소염제",
+    classRaw: "[01140]해열.진통.소염제",
+    permitDate: "20150303",
+  }),
+  item({
+    itemSeq: "900000102",
+    name: "가상이부펜정200밀리그램",
+    company: "가상헬스",
+    ingredient: "이부프로펜",
+    productType: "해열.진통.소염제",
+    classRaw: "[01140]해열.진통.소염제",
+  }),
+  item({
+    itemSeq: "900000103",
+    name: "가상소화정",
+    company: "가상제약(주)",
+    ingredient: "판크레아틴, 비오디아스타제",
+    productType: "건위소화제",
+    classRaw: "[02330]건위소화제",
+  }),
+  item({
+    itemSeq: "900000104",
+    name: "가상알레르정10밀리그램",
+    company: "가상헬스",
+    ingredient: "세티리진염산염",
+    productType: "항히스타민제",
+    classRaw: "[01410]항히스타민제",
+  }),
+  item({
+    itemSeq: "900000105",
+    name: "가상생리통정",
+    company: "가상제약(주)",
+    ingredient: "이부프로펜, 파마브롬",
+    productType: "해열.진통.소염제",
+    classRaw: "[01140]해열.진통.소염제",
+  }),
+  item({ itemSeq: "900000107", name: "가상감기시럽", company: "가상헬스", ingredient: "", productType: "", classRaw: "" }),
 ];
 
 const norm = (s: string) => s.replace(/\s+/g, "").toLowerCase();
@@ -46,4 +97,19 @@ const DEMO_CAUTIONS: Record<string, string> = {
 export const demoDrugCaution: import("@/lib/drug-search-client").DrugCautionFn = async (itemSeq) => {
   await new Promise((r) => setTimeout(r, 150));
   return { ok: true, caution: DEMO_CAUTIONS[itemSeq] ?? "" };
+};
+
+/** 데모용 가상 e약은요 정보 — 화면에 '데모용 예시'로 표시 (실제 식약처 응답 아님) */
+const DEMO_EASY: Record<string, import("@/lib/drug-search-client").EasyInfo> = {
+  "900000101": {
+    efficacy: "(데모용 예시) 두통, 치통, 생리통 등의 통증과 발열에 사용하는 약이에요.",
+    usage: "(데모용 예시) 제품 설명서에 적힌 용량·간격을 지켜 복용해요.",
+    beforeUse: "(데모용 예시) 이 약에 과민 반응이 있었던 사람은 복용 전 의사·약사와 상의해요.",
+    caution: "(데모용 예시) 같은 성분이 든 다른 약과 함께 먹지 않도록 주의해요.",
+  },
+};
+export const demoDrugEasyInfo: import("@/lib/drug-search-client").DrugEasyInfoFn = async (itemSeq) => {
+  await new Promise((r) => setTimeout(r, 150));
+  const info = DEMO_EASY[itemSeq];
+  return info ? { ok: true, info, demo: true } : { ok: false, message: "이 제품의 e약은요 개요 정보가 없어요. (데모)" };
 };

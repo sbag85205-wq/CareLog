@@ -268,15 +268,36 @@ node --env-file=.env.local scripts/provision-virtual-patient.mjs   # 환자 A, B
   `prescription_notes`(복용 후 느낀 점: 태그 배열·메모, 처방 전체 또는 약 1개)
 - `visit_questions.prescription_id` 열 추가 (nullable, 기존 질문 그대로)
 - 트리거 `private.check_rx_links`: 약·메모·질문이 같은 환자의 처방에만 연결되도록
-- RLS 정책 10개: 환자 본인 읽기·쓰기 / 담당 의료진 읽기 / 보호자는 `medications` 공유 범위 + 처방의 `visible_to_guardian`일 때만 읽기 (`private.rx_shared_with_me`)
+- RLS 정책 10개: 환자 본인 읽기·쓰기 / 담당 의료진 읽기 / 보호자는 `medications` 공유 범위 + 처방의 `visible_to_guardian`일 때만 읽기 (`private.rx_shared_with_me`) — **migration 11에서 보호자 직접 조회는 닫고 선택 공유 함수로 대체**
 - RPC `create_prescription(...)`(security invoker): 처방 + 약을 한 트랜잭션으로, 같은 `request_id`면 기존 ID 반환
-- 테스트: `supabase/tests/prescription-history.test.ts` (PGlite), `verify/10_post_apply_catalog_readonly.sql` 기준 **테이블 19 · 정책 43**
+- 테스트: `supabase/tests/prescription-history.test.ts` (PGlite). 10만 적용하면 테이블 19 · 정책 43, 11까지 적용하면 아래 기준
 
 ### Production 반영 때 순서 (별도 승인 후)
 
 1. Supabase CLI 액세스 토큰 갱신 (현재 토큰은 401 — `.env.local`에서 편집기로 교체, 값은 출력하지 않음)
 2. `bash scripts/supabase-remote.sh status` → 9개 적용, 10번만 미적용인지 확인
 3. `bash scripts/supabase-remote.sh dry-run` → 이 파일 1개만 나오는지 확인 (`supabase/drafts/`의 재발급 SQL은 대상 아님)
-4. 적용 → `status` → `verify-catalog`(테이블 19 · 정책 43)
+4. 적용 → `status` → `verify-catalog` (10·11을 함께 적용하면 테이블 21 · 정책 47 — 아래 7단계)
 5. 앱은 표를 자동으로 알아채므로 별도 설정 없음 — 적용 전 Preview/Production에서는 ‘처방 이력은 DB 업데이트 후…’ 안내와 함께 예전처럼 `medications`에 등록
 6. `npm run test:e2e:remote` — 처방전 등록 테스트가 처방 이력 모드(prescription_items)로 자동 전환해 확인
+
+## 7단계: FeelPill 약 기록 확장 (migration 11 — 아직 원격 미적용, 브랜치 `feel-pill-v2`)
+
+`migrations/20261124090000_feelpill_records.sql` — migration 10 다음에 적용. 기존 테이블·데이터를 지우거나 바꾸지 않음 (새 컬럼은 모두 기본값).
+
+- `prescriptions` + `kind`(처방/일반약)·`source`(처방전·상자·영수증·검색·직접) — 일반약도 같은 표 (중복 표 없음)
+- `prescription_items` + 성분·회사·일반/전문·식약처 약효 분류·사용자용 종류(허용 목록 배열)·분류 근거·보험코드·★·반복 일정
+- `prescription_notes` + 복용한 날·제안 태그(`suggested_tags`)·요약(`summary`)·방식(`summary_source`) — 원본 `memo`와 분리
+- `access_grants` + `relation`(가족·연인·친구·보호자) — `set_grant_relation()`으로 환자 본인만
+- 새 표 `intake_logs`(복용 체크: 시간대는 하루 한 번, 필요할 때는 여러 번, 본인만), `record_shares`(선택 공유: 기록·사람·항목·기간·철회, 쓰기는 함수만)
+- 함수: `create_med_record`(invoker), `share_record`·`revoke_record_share`·`shared_records_for_me`·`set_grant_relation`(definer, `search_path=''`)
+- 처방 이력 표 3개의 조회 정책 재생성 — 공유받은 사람은 표를 직접 못 보고 `shared_records_for_me()`가 허용 항목만 돌려줌. `private.rx_shared_with_me` 삭제
+- 테스트: `supabase/tests/feelpill-records.test.ts` (PGlite 17개 — 환자 간 유출·공유 철회·만료·관계 철회·항목 제한)
+- 적용 후 `verify-catalog` 기준 **테이블 21 · 정책 47**
+
+### 적용 순서 (별도 승인 후 — 이번 작업에서는 적용하지 않음)
+
+1. 토큰 갱신 → `status`로 1–9(또는 1–10) 적용 상태 확인
+2. `dry-run` → 10·11 (또는 11) 파일만 대상인지 확인
+3. 적용 → `verify-catalog`(테이블 21 · 정책 47) → `advisors`
+4. 앱은 새 표·함수가 없으면 "DB 업데이트 후…" 안내와 함께 예전 `medications` 방식으로 동작하므로, 앱 배포와 DB 적용 순서는 어느 쪽이 먼저여도 됨

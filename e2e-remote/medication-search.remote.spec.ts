@@ -44,7 +44,7 @@ async function newPage(browser: Browser): Promise<Page> {
 }
 
 async function openAdd(page: Page) {
-  await menu(page, "내 약").click();
+  await menu(page, "나의 약 기록").click();
   await page.getByRole("button", { name: "약 직접 추가" }).click();
   return page.getByRole("dialog");
 }
