@@ -1,8 +1,9 @@
 "use client";
 
-import { ChartNoAxesColumn, FileText, Pencil, Plus, Presentation, Trash2 } from "lucide-react";
+import { CalendarDays, ChartNoAxesColumn, FileText, MessageCircleQuestion, Pencil, Pill, Plus, Presentation, Trash2, TriangleAlert } from "lucide-react";
 import { useState } from "react";
 import { PageTitle } from "@/components/patient-ui/AppShell";
+import { Disclosure } from "@/components/patient-ui/Disclosure";
 import { ClipboardIcon } from "@/components/patient-ui/illustrations";
 import { Alert, CardHeading, cn, Notice, PButton, PCard, SoftSheet, StatusPill, Switch, TextField } from "@/components/patient-ui/kit";
 import { VisitShow } from "@/components/rx/RxDetail";
@@ -46,12 +47,14 @@ export function VisitPrepView({
   const [showId, setShowId] = useState<string | null>(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const active = rx?.available ? activeItems(rx) : [];
-  const discomfort = rx?.available
-    ? [...rx.notes]
-        .filter((n) => n.tags.some(isDiscomfortTag))
-        .sort((a, b) => noteDate(b).localeCompare(noteDate(a)))
-        .slice(0, 3)
-    : [];
+  const discomfortAll = rx?.available ? [...rx.notes].filter((n) => n.tags.some(isDiscomfortTag)).sort((a, b) => noteDate(b).localeCompare(noteDate(a))) : [];
+  const discomfort = discomfortAll.slice(0, 3);
+  const openQs = questions.filter((q) => !q.done);
+  const latestRx = rx?.available ? sortPrescriptions(rx.prescriptions).find((p) => p.kind === "prescription") : undefined;
+  const sentence = (n: (typeof discomfortAll)[number]) => {
+    const p = rx!.prescriptions.find((x) => x.id === n.prescriptionId);
+    return p ? experienceSentence(p, n, rx!.items.find((i) => i.id === n.itemId)?.name) : "";
+  };
   const recent = rx?.available ? sortPrescriptions(rx.prescriptions).slice(0, 4) : [];
   const shown = rx?.prescriptions.find((p) => p.id === showId);
   const s = summarizeRecent(records, 14, today);
@@ -72,37 +75,57 @@ export function VisitPrepView({
           ) : undefined
         }
       />
+      {/* ───────── 진료 때 꼭 전할 핵심 (한 장) ───────── */}
+      <PCard tone="lavender" aria-label="진료 핵심 정보" className="space-y-3">
+        <h2 className="text-lg font-bold text-ink sm:text-xl">진료 때 꼭 전할 것</h2>
+        <dl className="grid gap-2 sm:grid-cols-2">
+          <KeyRow icon={CalendarDays} label="다음 진료">
+            {patient.nextVisitDate ? formatLongKoreanDate(patient.nextVisitDate) : "아직 정하지 않았어요"}
+          </KeyRow>
+          <KeyRow icon={Pill} label={`지금 복용 중 ${active.length}개`}>
+            {active.length
+              ? active
+                  .slice(0, 3)
+                  .map(({ item }) => item.name)
+                  .join(", ") + (active.length > 3 ? ` 외 ${active.length - 3}개` : "")
+              : "없음"}
+          </KeyRow>
+          <KeyRow icon={TriangleAlert} label={`기억해 둔 불편 경험 ${discomfortAll.length}건`}>
+            {discomfortAll[0] ? sentence(discomfortAll[0]) : "없음"}
+          </KeyRow>
+          <KeyRow icon={MessageCircleQuestion} label={`물어볼 질문 ${openQs.length}개`}>
+            {openQs.length
+              ? openQs
+                  .slice(0, 2)
+                  .map((q) => q.text)
+                  .join(" / ") + (openQs.length > 2 ? ` 외 ${openQs.length - 2}개` : "")
+              : "아직 없어요"}
+          </KeyRow>
+        </dl>
+        {rx?.available && (
+          <div className="flex flex-wrap gap-2">
+            <PButton size="md" icon={FileText} onClick={() => setSummaryOpen(true)}>
+              진료용 요약 열기
+            </PButton>
+            {latestRx && (
+              <PButton size="md" variant="secondary" icon={Presentation} className="!border-white" onClick={() => setShowId(latestRx.id)}>
+                최근 처방 보여주기
+              </PButton>
+            )}
+          </div>
+        )}
+      </PCard>
+
       <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
         <div className="space-y-5">
           <NextVisitCard patient={patient} today={today} repo={repo} />
-          {rx && (
-            <PCard aria-labelledby="show-title">
-              <CardHeading id="show-title" title="진료 때 보여주기 · 이전 처방 이력" sub="처방·당시 약·복용 경험·질문을 한 화면으로 보여 줘요." />
-              {!rx.available ? (
-                <Notice>{rx.message}</Notice>
-              ) : recent.length === 0 ? (
-                <p className="text-sm text-ink-soft">처방을 등록하면 여기서 바로 보여 줄 수 있어요.</p>
-              ) : (
-                <ul className="space-y-2">
-                  {recent.map((p) => (
-                    <li key={p.id}>
-                      <button
-                        type="button"
-                        onClick={() => setShowId(p.id)}
-                        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-line bg-white p-3 text-left hover:border-brand-300"
-                      >
-                        <span className="font-semibold text-ink">{prescriptionLabel(p, itemsOf(rx, p.id).length)}</span>
-                        <Presentation className="h-5 w-5 shrink-0 text-brand-700" aria-hidden />
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </PCard>
-          )}
           {rx?.available && (
-            <PCard aria-labelledby="cur-title">
-              <CardHeading id="cur-title" title="현재 복용 중이라고 기록한 약" sub="제품명·성분·복용 방법은 사용자가 확인해 저장한 내용이에요." />
+            <Disclosure
+              title="현재 복용 중이라고 기록한 약"
+              aria-label="현재 복용 중이라고 기록한 약"
+              summary={`${active.length}개 · 사용자가 확인해 저장한 내용`}
+              rememberKey="visit.current"
+            >
               {active.length === 0 ? (
                 <p className="text-sm text-ink-soft">지금 복용 중으로 표시한 약이 없어요.</p>
               ) : (
@@ -119,33 +142,65 @@ export function VisitPrepView({
                   ))}
                 </ul>
               )}
-            </PCard>
+            </Disclosure>
           )}
           {rx?.available && (
-            <PCard aria-labelledby="bad-title">
-              <CardHeading id="bad-title" title="기억해 둔 불편 경험" sub="환자가 직접 남긴 경험 — 원인 약물은 확인되지 않은 기록이에요." />
+            <Disclosure
+              title="기억해 둔 불편 경험"
+              aria-label="기억해 둔 불편 경험"
+              summary={`${discomfortAll.length}건 · 환자가 직접 남긴 경험, 원인 약물은 확인되지 않은 기록`}
+              rememberKey="visit.discomfort"
+            >
               {discomfort.length === 0 ? (
                 <p className="text-sm text-ink-soft">남긴 불편 경험이 없어요.</p>
               ) : (
                 <ul className="space-y-2">
-                  {discomfort.map((n) => {
-                    const p = rx.prescriptions.find((x) => x.id === n.prescriptionId);
-                    return p ? (
-                      <li key={n.id} className="rounded-[0.875rem] border border-peach-100 bg-peach-50 p-3 text-sm text-ink">
-                        {experienceSentence(p, n, rx.items.find((i) => i.id === n.itemId)?.name)}
-                      </li>
-                    ) : null;
-                  })}
+                  {discomfort.map((n) => (
+                    <li key={n.id} className="rounded-[0.875rem] border border-peach-100 bg-peach-50 p-3 text-sm text-ink">
+                      {sentence(n)}
+                    </li>
+                  ))}
                 </ul>
               )}
-            </PCard>
+            </Disclosure>
           )}
-          <PCard aria-labelledby="sum-title">
-            <CardHeading
-              id="sum-title"
-              title="최근 2주 요약"
-              sub={`${formatLongKoreanDate(addDays(today, -13), false).replace(/ \S+요일$/, "")} – ${formatLongKoreanDate(today, false).replace(/ \S+요일$/, "")}`}
-            />
+          {rx && (
+            <Disclosure
+              title="진료 때 보여주기 · 이전 처방 이력"
+              aria-label="진료 때 보여주기 · 이전 처방 이력"
+              summary={rx.available ? `최근 기록 ${recent.length}건 — 눌러서 한 화면으로 보여 줘요` : undefined}
+              defaultOpen={false}
+              rememberKey="visit.history"
+            >
+              {!rx.available ? (
+                <Notice>{rx.message}</Notice>
+              ) : recent.length === 0 ? (
+                <p className="text-sm text-ink-soft">처방을 등록하면 여기서 바로 보여 줄 수 있어요.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {recent.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        onClick={() => setShowId(p.id)}
+                        className="flex min-h-12 w-full items-center justify-between gap-2 rounded-2xl border border-line bg-white p-3 text-left hover:border-brand-300"
+                      >
+                        <span className="font-semibold text-ink">{prescriptionLabel(p, itemsOf(rx, p.id).length)}</span>
+                        <Presentation className="h-5 w-5 shrink-0 text-brand-700" aria-hidden />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Disclosure>
+          )}
+          <Disclosure
+            title="최근 2주 컨디션 요약"
+            aria-label="최근 2주 요약"
+            summary={`${formatLongKoreanDate(addDays(today, -13), false).replace(/ \S+요일$/, "")} – ${formatLongKoreanDate(today, false).replace(/ \S+요일$/, "")} · 기록 ${s.count}/14일`}
+            defaultOpen={false}
+            rememberKey="visit.condition"
+          >
             <dl className="divide-y divide-line">
               <Row label="기록한 날" value={`${s.count} / 14일`} />
               <Row label="평균 컨디션" value={s.avgCondition === "-" ? "—" : `${s.avgCondition} / 5점`} strong />
@@ -165,7 +220,7 @@ export function VisitPrepView({
                 컨디션 기록 열기
               </PButton>
             )}
-          </PCard>
+          </Disclosure>
         </div>
         <div className="space-y-5">
           <QuestionsCard patientId={patient.id} questions={questions} repo={repo} rx={rx} />
@@ -191,6 +246,18 @@ export function VisitPrepView({
       <SoftSheet open={summaryOpen} title="진료용 요약" onClose={() => setSummaryOpen(false)}>
         {summaryOpen && rx?.available && <VisitSummary rx={rx} patient={patient} questions={questions} today={today} />}
       </SoftSheet>
+    </div>
+  );
+}
+
+function KeyRow({ icon: Icon, label, children }: { icon: typeof Pill; label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-[0.875rem] border border-white bg-white/80 p-3">
+      <dt className="flex items-center gap-1.5 text-sm font-bold text-ink">
+        <Icon className="h-4 w-4 shrink-0 text-lavender-700" aria-hidden />
+        {label}
+      </dt>
+      <dd className="mt-1 text-sm break-words text-ink-soft">{children}</dd>
     </div>
   );
 }

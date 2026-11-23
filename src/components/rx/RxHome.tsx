@@ -1,6 +1,18 @@
 "use client";
 
-import { ArrowRight, CalendarCheck, ClipboardList, NotebookPen, Plus, Presentation, Search } from "lucide-react";
+import {
+  ArrowRight,
+  CalendarCheck,
+  ChevronDown,
+  ClipboardList,
+  HeartPulse,
+  MessageCircleQuestion,
+  NotebookPen,
+  Pill,
+  Plus,
+  Presentation,
+  Search,
+} from "lucide-react";
 import { useState } from "react";
 import { Notice, PButton, PCard, SoftSheet } from "@/components/patient-ui/kit";
 import { CloudMascot, NotebookIcon } from "@/components/patient-ui/illustrations";
@@ -61,6 +73,7 @@ export function RxHome({
   onVisit: () => void;
 }) {
   const [showId, setShowId] = useState<string | null>(null);
+  const [allCurrent, setAllCurrent] = useState(false);
   const ready = Boolean(rx?.available);
   const active = ready ? activeItems(rx!) : [];
   const manual = medicationsOf(snapshot, patient.id);
@@ -80,6 +93,16 @@ export function RxHome({
     : [];
   const currentCount = active.length + manual.length;
   const lastNote = ready ? [...rx!.notes].sort((a, b) => noteDate(b).localeCompare(noteDate(a)))[0] : undefined;
+  // 오늘 한눈에: 정해 둔 시간대 기록 수 (사용자가 누른 것만)
+  const todaysIntakes = ready ? rx!.intakes.filter((x) => x.takenOn === today) : [];
+  const slotTotal = active.reduce((n, { item }) => n + item.scheduleSlots.length, 0);
+  const slotDone = active.reduce(
+    (n, { item }) => n + item.scheduleSlots.filter((sl) => todaysIntakes.some((x) => x.itemId === item.id && x.slot === sl)).length,
+    0,
+  );
+  const currentList = [...active.map((a) => ({ kind: "rx" as const, ...a })), ...manual.map((m) => ({ kind: "manual" as const, m }))];
+  const CURRENT_PREVIEW = 3;
+  const shownCurrent = allCurrent ? currentList : currentList.slice(0, CURRENT_PREVIEW);
 
   return (
     <div className="space-y-6">
@@ -89,45 +112,68 @@ export function RxHome({
         aria-labelledby="home-title"
       >
         <div className="md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-6">
-        <div className="min-w-0 max-w-xl">
-          <p className="glass inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold text-brand-800">
-            <NotebookPen className="h-4 w-4 shrink-0 text-sage" aria-hidden />
-            {patient.name} 님의 복약 경험 기록장
-          </p>
-          <h1 id="home-title" className="mt-4 text-[1.75rem] leading-[1.22] font-extrabold tracking-tight break-keep text-ink sm:text-[2.6rem]">
-            그때 먹었던 약,
-            <br />
-            <span className="text-brand-700">나한테 어땠더라?</span>
-          </h1>
-          {/* 모바일: 설명 옆에 기록 노트 + 몽글 (제목·버튼을 가리지 않음) */}
-          <div className="mt-3 flex items-end justify-between gap-3">
-            <p className="min-w-0 text-[1.05rem] break-keep text-ink-soft">{BRAND.sub}</p>
-            <HeroArt compact className="md:hidden" />
-          </div>
-          <div className="mt-6 grid gap-2.5 sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-            <PButton icon={Plus} onClick={onRegister}>
-              약 등록하기
-            </PButton>
-            <PButton variant="secondary" icon={Search} className="!border-white bg-white/80" onClick={() => onFind()}>
-              내가 먹었던 약 찾기
-            </PButton>
-          </div>
-          {ready && (
-            <p className="glass mt-6 inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[0.875rem] px-4 py-2.5 text-sm text-ink-soft">
-              <span className="font-semibold text-ink">나의 기록장</span>
-              <span className="text-base font-bold text-ink">
-                약 {rx!.items.length}개 · 경험 {rx!.notes.length}건
-              </span>
-              {lastNote && <span>마지막 기록 {dotDate(noteDate(lastNote))}</span>}
+          <div className="min-w-0 max-w-xl">
+            <p className="glass inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-semibold text-brand-800">
+              <NotebookPen className="h-4 w-4 shrink-0 text-sage" aria-hidden />
+              {patient.name} 님의 복약 경험 기록장
             </p>
-          )}
-        </div>
-        {/* PC·태블릿: 오른쪽 칸 (본문과 겹치지 않게 그리드로 배치) */}
-        <HeroArt className="hidden md:flex md:pr-2 lg:pr-8" />
+            <h1 id="home-title" className="mt-4 text-[1.75rem] leading-[1.22] font-extrabold tracking-tight break-keep text-ink sm:text-[2.6rem]">
+              그때 먹었던 약,
+              <br />
+              <span className="text-brand-700">나한테 어땠더라?</span>
+            </h1>
+            {/* 모바일: 설명 옆에 기록 노트 + 몽글 (제목·버튼을 가리지 않음) */}
+            <div className="mt-3 flex items-end justify-between gap-3">
+              <p className="min-w-0 text-[1.05rem] break-keep text-ink-soft">{BRAND.sub}</p>
+              <HeroArt compact className="md:hidden" />
+            </div>
+            <div className="mt-6 grid gap-2.5 sm:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+              <PButton icon={Plus} onClick={onRegister}>
+                약 등록하기
+              </PButton>
+              <PButton variant="secondary" icon={Search} className="!border-white bg-white/80" onClick={() => onFind()}>
+                내가 먹었던 약 찾기
+              </PButton>
+            </div>
+            {ready && (
+              <p className="glass mt-6 inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[0.875rem] px-4 py-2.5 text-sm text-ink-soft">
+                <span className="font-semibold text-ink">나의 기록장</span>
+                <span className="text-base font-bold text-ink">
+                  약 {rx!.items.length}개 · 경험 {rx!.notes.length}건
+                </span>
+                {lastNote && <span>마지막 기록 {dotDate(noteDate(lastNote))}</span>}
+              </p>
+            )}
+          </div>
+          {/* PC·태블릿: 오른쪽 칸 (본문과 겹치지 않게 그리드로 배치) */}
+          <HeroArt className="hidden md:flex md:pr-2 lg:pr-8" />
         </div>
       </section>
 
       {rx && !rx.available && <Notice>{rx.message}</Notice>}
+
+      {/* ───────── 오늘 한눈에 (누르면 해당 화면으로) ───────── */}
+      {ready && (
+        <section aria-label="오늘 한눈에" className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
+          <SummaryTile icon={Pill} label="지금 복용 중" value={`${currentCount}개`} onClick={() => onFind({ use: "current" })} />
+          <SummaryTile
+            icon={CalendarCheck}
+            label="오늘 복용 체크"
+            value={slotTotal ? `${slotDone} / ${slotTotal}` : "일정 없음"}
+            tone="mint"
+            onClick={() => document.getElementById("home-intake")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            disabled={active.length === 0}
+          />
+          <SummaryTile
+            icon={HeartPulse}
+            label="복용 경험"
+            value={`${rx!.notes.length}건`}
+            sub={lastNote ? `마지막 ${dotDate(noteDate(lastNote))}` : undefined}
+            onClick={() => onBody()}
+          />
+          <SummaryTile icon={MessageCircleQuestion} label="진료 때 물어볼 질문" value={`${openQuestions}개`} tone="lavender" onClick={onVisit} />
+        </section>
+      )}
 
       {(usedCats.length > 0 || expTags.length > 0) && (
         <PCard aria-label="빠르게 다시 찾기" className="flex flex-col gap-4 !p-4 sm:!p-5 lg:flex-row lg:gap-8">
@@ -162,48 +208,56 @@ export function RxHome({
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3 xl:items-start">
         <PCard aria-label="지금 복용 중">
           <SectionHead
-            title={
-              <>
-                지금 복용 중인 약 {currentCount > 0 && <span className="text-brand-700">{currentCount}</span>}
-              </>
-            }
+            title={<>지금 복용 중인 약 {currentCount > 0 && <span className="text-brand-700">{currentCount}</span>}</>}
             action={active.length > 0 ? { label: "전체 보기", onClick: () => onFind({ use: "current" }) } : undefined}
           />
-          {active.length === 0 && manual.length === 0 ? (
+          {currentList.length === 0 ? (
             <p className="rounded-[0.875rem] bg-ivory p-4 text-sm text-ink-soft">
               지금 먹는 약이 없어도 괜찮아요. 예전에 먹었던 약을 등록하고 그때 느낀 점을 남겨 두면, 다음에 다시 찾을 수 있어요.
             </p>
           ) : (
-            <ul className="divide-y divide-line/80">
-              {active.slice(0, 4).map(({ item, prescription }) => (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    onClick={() => onOpenItem(item.id)}
-                    className="flex w-full items-start justify-between gap-3 rounded-xl py-3 text-left transition hover:bg-ivory/80"
-                    aria-label={`복용 중: ${item.name}`}
-                  >
-                    <span className="min-w-0">
-                      <span className="block font-bold break-words text-ink">{item.name}</span>
-                      <span className="block text-sm text-ink-soft">{howToTake(item)}</span>
-                      <span className="block text-xs text-ink-soft/80">
-                        {dotDate(prescription.prescribedOn)} {prescription.kind === "otc" ? "일반약" : `${prescription.department || ""} 처방`}
+            <ul className="divide-y divide-line/80" id="home-current-list">
+              {shownCurrent.map((c) =>
+                c.kind === "rx" ? (
+                  <li key={c.item.id}>
+                    <button
+                      type="button"
+                      onClick={() => onOpenItem(c.item.id)}
+                      className="flex w-full items-start justify-between gap-3 rounded-xl py-3 text-left transition hover:bg-ivory/80"
+                      aria-label={`복용 중: ${c.item.name}`}
+                    >
+                      <span className="min-w-0">
+                        <span className="block font-bold break-words text-ink">{c.item.name}</span>
+                        <span className="block text-sm text-ink-soft">{howToTake(c.item)}</span>
+                        <span className="block text-xs text-ink-soft/80">
+                          {dotDate(c.prescription.prescribedOn)} {c.prescription.kind === "otc" ? "일반약" : `${c.prescription.department || ""} 처방`}
+                        </span>
                       </span>
-                    </span>
-                    <KindPill p={prescription} />
-                  </button>
-                </li>
-              ))}
-              {manual.slice(0, Math.max(0, 4 - active.length)).map((m) => (
-                <li key={m.id} className="py-3" aria-label={`복용 중: ${m.name}`}>
-                  <p className="font-bold break-words text-ink">{m.name}</p>
-                  <p className="text-sm text-ink-soft">{[m.dosage, m.schedule].filter(Boolean).join(" · ") || "복용 방법 미입력"}</p>
-                  <p className="text-xs text-ink-soft/80">직접 추가한 약</p>
-                </li>
-              ))}
+                      <KindPill p={c.prescription} />
+                    </button>
+                  </li>
+                ) : (
+                  <li key={c.m.id} className="py-3" aria-label={`복용 중: ${c.m.name}`}>
+                    <p className="font-bold break-words text-ink">{c.m.name}</p>
+                    <p className="text-sm text-ink-soft">{[c.m.dosage, c.m.schedule].filter(Boolean).join(" · ") || "복용 방법 미입력"}</p>
+                    <p className="text-xs text-ink-soft/80">직접 추가한 약</p>
+                  </li>
+                ),
+              )}
             </ul>
           )}
-          {active.length + manual.length > 4 && <p className="mt-2 text-sm text-ink-soft">외 {active.length + manual.length - 4}개</p>}
+          {currentList.length > CURRENT_PREVIEW && (
+            <button
+              type="button"
+              aria-expanded={allCurrent}
+              aria-controls="home-current-list"
+              onClick={() => setAllCurrent((v) => !v)}
+              className="mt-2 inline-flex min-h-11 items-center gap-1 rounded-lg px-1 text-sm font-semibold text-brand-700 hover:text-brand-800"
+            >
+              {allCurrent ? "접기" : `${currentList.length - CURRENT_PREVIEW}개 더 보기`}
+              <ChevronDown className={`h-4 w-4 transition-transform ${allCurrent ? "rotate-180" : ""}`} aria-hidden />
+            </button>
+          )}
         </PCard>
 
         <PCard aria-label="최근 기록한 경험">
@@ -236,7 +290,7 @@ export function RxHome({
           )}
         </PCard>
 
-        <div className="space-y-5 md:col-span-2 xl:col-span-1">
+        <div id="home-intake" className="scroll-mt-24 space-y-5 md:col-span-2 xl:col-span-1">
           {ready && <IntakeCheck rx={rx!} store={rxStore} patientId={patient.id} today={today} />}
         </div>
       </div>
@@ -311,9 +365,7 @@ function HeroArt({ compact, className }: { compact?: boolean; className?: string
     <div className={`pointer-events-none flex shrink-0 items-end ${className ?? ""}`} aria-hidden>
       <CloudMascot
         className={
-          compact
-            ? "relative z-10 -mr-3 mb-0.5 w-[50px] min-[375px]:w-[56px] min-[430px]:w-[62px]"
-            : "relative z-10 -mr-10 mb-2 w-[76px] lg:-mr-14 lg:w-[88px]"
+          compact ? "relative z-10 -mr-3 mb-0.5 w-[50px] min-[375px]:w-[56px] min-[430px]:w-[62px]" : "relative z-10 -mr-10 mb-2 w-[76px] lg:-mr-14 lg:w-[88px]"
         }
       />
       <NotebookIcon className={compact ? "w-[58px] min-[375px]:w-[66px] min-[430px]:w-[74px]" : "w-40 lg:w-52"} />
@@ -337,5 +389,43 @@ function SectionHead({ title, action }: { title: React.ReactNode; action?: { lab
         </button>
       )}
     </div>
+  );
+}
+
+/** 오늘 한눈에 — 숫자 하나와 이름, 누르면 해당 화면으로 */
+function SummaryTile({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  tone = "white",
+  onClick,
+  disabled,
+}: {
+  icon: typeof Pill;
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: "white" | "mint" | "lavender";
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={`${label} ${value}${sub ? ` · ${sub}` : ""}`}
+      className={`flex min-h-[5.5rem] flex-col items-start justify-between gap-1 rounded-[1rem] border p-3.5 text-left shadow-soft transition hover:border-brand-200 disabled:cursor-default disabled:opacity-70 ${
+        tone === "mint" ? "border-mint-200/70 bg-mint-50" : tone === "lavender" ? "border-lavender-100 bg-lavender-50" : "border-line bg-white"
+      }`}
+    >
+      <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-soft">
+        <Icon className="h-4 w-4 shrink-0 text-brand-700" aria-hidden />
+        {label}
+      </span>
+      <span className="text-xl font-extrabold text-ink">{value}</span>
+      {sub && <span className="text-xs text-ink-soft">{sub}</span>}
+    </button>
   );
 }

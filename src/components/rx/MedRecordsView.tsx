@@ -1,15 +1,16 @@
 "use client";
 
-import { PackagePlus, Search, Star, X } from "lucide-react";
+import { ChevronDown, PackagePlus, Search, SlidersHorizontal, Star, X } from "lucide-react";
 import { useState } from "react";
 import { MedicationsView } from "@/components/patient-db/MedicationsView";
 import { PageTitle } from "@/components/patient-ui/AppShell";
 import { BottleIcon, CloudMascot } from "@/components/patient-ui/illustrations";
 import { ChipGroup, cn, Notice, PButton, PCard, Segmented, Switch } from "@/components/patient-ui/kit";
 import type { DbSnapshot, SupabaseRepository } from "@/lib/repository/supabase";
-import { CATEGORIES } from "@/lib/rx/categories";
+import { CATEGORIES, categoryLabel } from "@/lib/rx/categories";
 import {
   filterItems,
+  filterPrescriptions,
   monthLabel,
   notesForItem,
   slashDate,
@@ -68,6 +69,10 @@ export function MedRecordsView({
   const [record, setRecord] = useState<string | null>(initial.record ?? null);
   const [item, setItem] = useState<string | null>(initial.item ?? null);
   const set = (patch: Partial<RxFilter>) => setF((cur) => ({ ...cur, ...patch }));
+  // 상세 필터: 처음에는 접어 두고, 홈에서 조건을 가지고 들어오면 펼침
+  const [filtersOpen, setFiltersOpen] = useState(() =>
+    Object.entries(initial.filter ?? {}).some(([k, v]) => k !== "query" && (Array.isArray(v) ? v.length : v && v !== "all")),
+  );
   const meds = medicationsOf(snapshot, patient.id);
 
   if (rx?.available && item) {
@@ -91,7 +96,16 @@ export function MedRecordsView({
 
   const rows = rx?.available ? filterItems(rx, f) : [];
   const usedCats = rx?.available ? CATEGORIES.filter((c) => rx.items.some((i) => i.categories.includes(c.id))) : [];
-  const active = Object.entries(f).filter(([, v]) => (Array.isArray(v) ? v.length : v && v !== "all")).length;
+  const recordCount = rx?.available ? filterPrescriptions(rx, f).length : 0;
+  // 지금 걸려 있는 조건 (검색어 제외) — 하나씩 뺄 수 있는 칩
+  const chips: { key: string; label: string; remove: () => void }[] = [];
+  if (f.use && f.use !== "all")
+    chips.push({ key: "use", label: f.use === "current" ? "지금 복용 중" : "과거 복용 기록", remove: () => set({ use: undefined }) });
+  if (f.category) chips.push({ key: "cat", label: categoryLabel(f.category), remove: () => set({ category: undefined }) });
+  if (f.department) chips.push({ key: "dept", label: f.department, remove: () => set({ department: undefined }) });
+  if (f.month) chips.push({ key: "month", label: monthLabel(f.month), remove: () => set({ month: undefined }) });
+  if (f.starredOnly) chips.push({ key: "star", label: "★ 보관만", remove: () => set({ starredOnly: undefined }) });
+  for (const t of f.tags ?? []) chips.push({ key: `tag-${t}`, label: t, remove: () => set({ tags: (f.tags ?? []).filter((x) => x !== t) }) });
 
   return (
     <div className="space-y-5">
@@ -117,96 +131,139 @@ export function MedRecordsView({
 
       {rx?.available && (
         <>
-          <label className="relative block">
-            <Search className="pointer-events-none absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-ink-soft" aria-hidden />
-            <input
-              value={f.query ?? ""}
-              onChange={(e) => set({ query: e.target.value || undefined })}
-              placeholder="기억나는 제품명·성분 일부"
-              aria-label="제품명·성분으로 찾기"
-              className="h-14 w-full rounded-[1.25rem] border border-line bg-white pr-4 pl-12 text-lg outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
-            />
-          </label>
-
-          <PCard className="space-y-3 !p-4" aria-label="찾기 조건">
-            <div>
-              <p className="mb-1.5 text-xs font-bold text-ink-soft">복용 상태</p>
-              <ChipGroup<UseState>
-                ariaLabel="복용 상태"
-                value={f.use ?? "all"}
-                onChange={(v) => set({ use: v })}
-                options={[
-                  { value: "all", label: "전체 약" },
-                  { value: "current", label: "지금 복용 중" },
-                  { value: "past", label: "과거 복용 기록" },
-                ]}
+          <div className="flex gap-2">
+            <label className="relative block min-w-0 flex-1">
+              <Search className="pointer-events-none absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 text-ink-soft" aria-hidden />
+              <input
+                value={f.query ?? ""}
+                onChange={(e) => set({ query: e.target.value || undefined })}
+                placeholder="기억나는 제품명·성분 일부"
+                aria-label="제품명·성분으로 찾기"
+                className="h-14 w-full rounded-[1.25rem] border border-line bg-white pr-11 pl-12 text-lg outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
               />
+              {f.query && (
+                <button
+                  type="button"
+                  onClick={() => set({ query: undefined })}
+                  aria-label="검색어 지우기"
+                  className="absolute top-1/2 right-2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-ink-soft hover:bg-ivory"
+                >
+                  <X className="h-4 w-4" aria-hidden />
+                </button>
+              )}
+            </label>
+            <button
+              type="button"
+              aria-expanded={filtersOpen}
+              aria-controls="records-filters"
+              onClick={() => setFiltersOpen((v) => !v)}
+              className={cn(
+                "inline-flex h-14 shrink-0 items-center gap-1.5 rounded-[1.25rem] border px-3.5 text-sm font-bold transition sm:px-4",
+                filtersOpen || chips.length ? "border-brand-200 bg-brand-50 text-brand-800" : "border-line bg-white text-ink-soft hover:border-brand-200",
+              )}
+            >
+              <SlidersHorizontal className="h-4 w-4" aria-hidden />
+              상세 필터{chips.length > 0 && <span className="rounded-full bg-brand-700 px-1.5 text-xs text-white">{chips.length}</span>}
+              <ChevronDown className={cn("h-4 w-4 transition-transform", filtersOpen && "rotate-180")} aria-hidden />
+            </button>
+          </div>
+
+          {chips.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2" aria-label="적용한 조건">
+              {chips.map((c) => (
+                <button
+                  key={c.key}
+                  type="button"
+                  onClick={c.remove}
+                  aria-label={`조건 빼기: ${c.label}`}
+                  className="inline-flex min-h-9 items-center gap-1 rounded-full border border-brand-200 bg-white px-3 text-sm font-semibold text-brand-800 hover:bg-brand-50"
+                >
+                  {c.label}
+                  <X className="h-3.5 w-3.5" aria-hidden />
+                </button>
+              ))}
+              <PButton size="sm" variant="ghost" icon={X} onClick={() => setF(f.query ? { query: f.query } : {})}>
+                조건 지우기
+              </PButton>
             </div>
-            {usedCats.length > 0 && (
+          )}
+
+          <div id="records-filters" hidden={!filtersOpen}>
+            <PCard className="space-y-3 !p-4" aria-label="찾기 조건">
               <div>
-                <p className="mb-1.5 text-xs font-bold text-ink-soft">약 종류</p>
-                <ChipGroup
-                  ariaLabel="약 종류"
-                  value={f.category ?? ""}
-                  onChange={(v) => set({ category: v === f.category || !v ? undefined : v })}
-                  options={[{ value: "", label: "전체" }, ...usedCats.map((c) => ({ value: c.id, label: c.label }))]}
+                <p className="mb-1.5 text-xs font-bold text-ink-soft">복용 상태</p>
+                <ChipGroup<UseState>
+                  ariaLabel="복용 상태"
+                  value={f.use ?? "all"}
+                  onChange={(v) => set({ use: v })}
+                  options={[
+                    { value: "all", label: "전체 약" },
+                    { value: "current", label: "지금 복용 중" },
+                    { value: "past", label: "과거 복용 기록" },
+                  ]}
                 />
               </div>
-            )}
-            <div className="grid gap-3 sm:grid-cols-2">
-              {usedDepartments(rx).length > 0 && (
+              {usedCats.length > 0 && (
                 <div>
-                  <p className="mb-1.5 text-xs font-bold text-ink-soft">진료과</p>
+                  <p className="mb-1.5 text-xs font-bold text-ink-soft">약 종류</p>
                   <ChipGroup
-                    ariaLabel="진료과"
-                    value={f.department ?? ""}
-                    onChange={(d) => set({ department: d || undefined })}
-                    options={[{ value: "", label: "전체" }, ...usedDepartments(rx).map((d) => ({ value: d, label: d }))]}
+                    ariaLabel="약 종류"
+                    value={f.category ?? ""}
+                    onChange={(v) => set({ category: v === f.category || !v ? undefined : v })}
+                    options={[{ value: "", label: "전체" }, ...usedCats.map((c) => ({ value: c.id, label: c.label }))]}
                   />
                 </div>
               )}
-              <label className="block">
-                <span className="mb-1.5 block text-xs font-bold text-ink-soft">날짜</span>
-                <select
-                  value={f.month ?? ""}
-                  onChange={(e) => set({ month: e.target.value || undefined })}
-                  aria-label="등록한 달"
-                  className="h-12 w-full rounded-xl border border-line bg-white px-3 text-base"
-                >
-                  <option value="">전체 기간</option>
-                  {usedMonths(rx).map((m) => (
-                    <option key={m} value={m}>
-                      {monthLabel(m)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <Switch label="★ 보관한 약·기록만" checked={Boolean(f.starredOnly)} onChange={(v) => set({ starredOnly: v || undefined })} />
-            {usedTags(rx).length > 0 && (
-              <div>
-                <p className="mb-1.5 text-xs font-bold text-ink-soft">복용 경험 태그</p>
-                <ChipGroup
-                  ariaLabel="복용 경험 태그"
-                  value={f.tags ?? []}
-                  onChange={(t) => set({ tags: toggle(f.tags ?? [], t) })}
-                  options={usedTags(rx).map((t) => ({ value: t, label: t }))}
-                />
+              <div className="grid gap-3 sm:grid-cols-2">
+                {usedDepartments(rx).length > 0 && (
+                  <div>
+                    <p className="mb-1.5 text-xs font-bold text-ink-soft">진료과</p>
+                    <ChipGroup
+                      ariaLabel="진료과"
+                      value={f.department ?? ""}
+                      onChange={(d) => set({ department: d || undefined })}
+                      options={[{ value: "", label: "전체" }, ...usedDepartments(rx).map((d) => ({ value: d, label: d }))]}
+                    />
+                  </div>
+                )}
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-bold text-ink-soft">날짜</span>
+                  <select
+                    value={f.month ?? ""}
+                    onChange={(e) => set({ month: e.target.value || undefined })}
+                    aria-label="등록한 달"
+                    className="h-12 w-full rounded-xl border border-line bg-white px-3 text-base"
+                  >
+                    <option value="">전체 기간</option>
+                    {usedMonths(rx).map((m) => (
+                      <option key={m} value={m}>
+                        {monthLabel(m)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
               </div>
-            )}
-            {active > 0 && (
-              <PButton size="sm" variant="ghost" icon={X} onClick={() => setF({})}>
-                조건 지우기
-              </PButton>
-            )}
-          </PCard>
+              <Switch label="★ 보관한 약·기록만" checked={Boolean(f.starredOnly)} onChange={(v) => set({ starredOnly: v || undefined })} />
+              {usedTags(rx).length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-xs font-bold text-ink-soft">복용 경험 태그</p>
+                  <ChipGroup
+                    ariaLabel="복용 경험 태그"
+                    value={f.tags ?? []}
+                    onChange={(t) => set({ tags: toggle(f.tags ?? [], t) })}
+                    options={usedTags(rx).map((t) => ({ value: t, label: t }))}
+                  />
+                </div>
+              )}
+            </PCard>
+          </div>
 
           <div className="max-w-md">
             <Segmented
               ariaLabel="보는 방법"
               items={[
-                { value: "items" as RecordsView, label: "약별로" },
-                { value: "records" as RecordsView, label: "처방·등록별로" },
+                { value: "items" as RecordsView, label: `약별로 ${rows.length}` },
+                { value: "records" as RecordsView, label: `처방·등록별로 ${recordCount}` },
               ]}
               value={view}
               onChange={(v) => {

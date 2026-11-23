@@ -1,10 +1,10 @@
 "use client";
 
-import { Eye, Share2, UserMinus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, Share2, UserMinus } from "lucide-react";
 import { useState } from "react";
 import { ShareView } from "@/components/patient-db/ShareView";
 import { PageTitle } from "@/components/patient-ui/AppShell";
-import { Alert, CardHeading, ChipGroup, cn, Notice, PButton, PCard, StatusPill } from "@/components/patient-ui/kit";
+import { Alert, CardHeading, ChipGroup, cn, Notice, PButton, PCard, StatusPill, StatusSteps } from "@/components/patient-ui/kit";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { formatDateTime } from "@/lib/date";
 import type { DbSnapshot, Grant, SupabaseRepository } from "@/lib/repository/supabase";
@@ -31,6 +31,12 @@ const PERIODS: { value: string; label: string; days: number | null }[] = [
   { value: "none", label: "멈출 때까지", days: null },
 ];
 const toggle = <T,>(list: T[], t: T) => (list.includes(t) ? list.filter((x) => x !== t) : [...list, t]);
+const STEPS = [
+  { key: "1", label: "① 기록" },
+  { key: "2", label: "② 사람" },
+  { key: "3", label: "③ 항목·기간" },
+  { key: "4", label: "④ 확인·공유" },
+];
 
 /** 공유 상대 이름: 데모 사용자 이름 → 초대 이메일 → '공유 상대' */
 export function personName(snapshot: DbSnapshot, g: Grant): string {
@@ -62,6 +68,8 @@ export function TogetherView({
   const [grantee, setGrantee] = useState(grants[0]?.granteeId ?? "");
   const [fields, setFields] = useState<ShareField[]>(DEFAULT_SHARE_FIELDS);
   const [period, setPeriod] = useState("30");
+  // 단계별 공유: 상세에서 '이 기록 공유하기'로 들어오면 ② 사람 고르기부터
+  const [step, setStep] = useState(presetRecord ? 2 : 1);
   const [notice, setNotice] = useState<string | null>(null);
   const action = useAsyncAction();
   const record = records.find((p) => p.id === recordId);
@@ -94,80 +102,153 @@ export function TogetherView({
 
       {rx?.available && rxStore && (
         <PCard aria-labelledby="share-new">
-          <CardHeading id="share-new" title="기록 하나 공유하기" sub="① 기록 고르기 → ② 사람 고르기 → ③ 보여 줄 항목·기간 확인" />
+          <CardHeading id="share-new" title="기록 하나 공유하기" sub="한 단계씩 고르고, 마지막에 상대에게 보이는 모습을 확인한 뒤 공유해요." />
           {grants.length === 0 ? (
-            <p className="text-sm text-ink-soft">아직 연결된 사람이 없어요. 아래에서 먼저 초대해 주세요.</p>
+            <p className="text-sm text-ink-soft">아직 연결된 사람이 없어요. 아래 ‘사람 초대 · 연결 관리’에서 먼저 초대해 주세요.</p>
           ) : (
             <div className="space-y-4">
-              <label className="block">
-                <span className="mb-1 block text-sm font-bold text-ink">① 공유할 기록</span>
-                <select
-                  value={recordId}
-                  onChange={(e) => setRecordId(e.target.value)}
-                  aria-label="공유할 기록"
-                  className="h-12 w-full rounded-xl border border-line bg-white px-3 text-base"
-                >
-                  <option value="">기록을 골라 주세요</option>
-                  {records.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {prescriptionLabel(p, itemsOf(rx, p.id).length)} —{" "}
-                      {itemsOf(rx, p.id)
+              <StatusSteps steps={STEPS} current={String(step)} />
+              <Notice>{notice}</Notice>
+
+              {step === 1 && (
+                <fieldset className="space-y-2">
+                  <legend className="mb-1 text-sm font-bold text-ink">① 공유할 기록을 하나 골라 주세요</legend>
+                  <div role="radiogroup" aria-label="공유할 기록" className="max-h-[22rem] space-y-2 overflow-y-auto pr-1">
+                    {records.map((p) => {
+                      const label = prescriptionLabel(p, itemsOf(rx, p.id).length);
+                      const names = itemsOf(rx, p.id)
                         .map((i) => i.name)
-                        .join(", ")
-                        .slice(0, 40)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <div>
-                <p className="mb-1 text-sm font-bold text-ink">② 함께 볼 사람</p>
-                <ChipGroup
-                  ariaLabel="함께 볼 사람"
-                  value={grantee}
-                  onChange={setGrantee}
-                  options={grants.map((g) => ({
-                    value: g.granteeId,
-                    label: `${personName(snapshot, g)}${rx.relations[g.granteeId] ? ` (${RELATION_LABEL[rx.relations[g.granteeId]]})` : ""}`,
-                  }))}
-                />
-              </div>
-              <div>
-                <p className="mb-1 text-sm font-bold text-ink">③ 보여 줄 항목</p>
-                <p className="mb-1.5 text-xs text-ink-soft">제품명과 등록일은 항상 보여요. 나머지는 켠 것만 보여요.</p>
-                <ChipGroup
-                  ariaLabel="보여 줄 항목"
-                  value={fields}
-                  onChange={(f) => setFields((c) => toggle(c, f))}
-                  options={fieldOptions.map((f) => ({ value: f, label: SHARE_FIELD_LABEL[f] }))}
-                />
-              </div>
-              <div>
-                <p className="mb-1 text-sm font-bold text-ink">공유 기간</p>
-                <ChipGroup ariaLabel="공유 기간" value={period} onChange={setPeriod} options={PERIODS.map((p) => ({ value: p.value, label: p.label }))} />
-              </div>
-              {preview && (
-                <div className="rounded-2xl border border-dashed border-brand-300 p-3" aria-label="상대에게 보이는 내용 미리 보기">
-                  <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-brand-800">
-                    <Eye className="h-4 w-4" aria-hidden /> 상대에게 이렇게 보여요
-                  </p>
-                  <SharedRecordCard r={preview} />
+                        .join(", ");
+                      return (
+                        <label
+                          key={p.id}
+                          className={cn(
+                            "flex cursor-pointer items-start gap-3 rounded-[0.875rem] border p-3 transition",
+                            recordId === p.id ? "border-brand-300 bg-brand-50" : "border-line bg-white hover:border-brand-200",
+                          )}
+                        >
+                          <input
+                            type="radio"
+                            name="share-record"
+                            className="mt-1 h-5 w-5 shrink-0 accent-brand-700"
+                            checked={recordId === p.id}
+                            onChange={() => setRecordId(p.id)}
+                            aria-label={`${label} — ${names}`}
+                          />
+                          <span className="min-w-0">
+                            <span className="block font-bold text-ink">{label}</span>
+                            <span className="block truncate text-sm text-ink-soft">{names}</span>
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              )}
+
+              {step === 2 && (
+                <div>
+                  <p className="mb-1 text-sm font-bold text-ink">② 함께 볼 사람</p>
+                  {record && <p className="mb-2 text-sm text-ink-soft">기록: {prescriptionLabel(record, itemsOf(rx, record.id).length)}</p>}
+                  <ChipGroup
+                    ariaLabel="함께 볼 사람"
+                    value={grantee}
+                    onChange={setGrantee}
+                    options={grants.map((g) => ({
+                      value: g.granteeId,
+                      label: `${personName(snapshot, g)}${rx.relations[g.granteeId] ? ` (${RELATION_LABEL[rx.relations[g.granteeId]]})` : ""}`,
+                    }))}
+                  />
                 </div>
               )}
+
+              {step === 3 && (
+                <div className="space-y-4">
+                  <div>
+                    <p className="mb-1 text-sm font-bold text-ink">③ 보여 줄 항목</p>
+                    <p className="mb-1.5 text-xs text-ink-soft">제품명과 등록일은 항상 보여요. 나머지는 켠 것만 보여요.</p>
+                    <ChipGroup
+                      ariaLabel="보여 줄 항목"
+                      value={fields}
+                      onChange={(f) => setFields((c) => toggle(c, f))}
+                      options={fieldOptions.map((f) => ({ value: f, label: SHARE_FIELD_LABEL[f] }))}
+                    />
+                  </div>
+                  <div>
+                    <p className="mb-1 text-sm font-bold text-ink">공유 기간</p>
+                    <ChipGroup ariaLabel="공유 기간" value={period} onChange={setPeriod} options={PERIODS.map((p) => ({ value: p.value, label: p.label }))} />
+                  </div>
+                </div>
+              )}
+
+              {step === 4 && preview && (
+                <div className="space-y-3">
+                  <dl className="grid gap-x-3 gap-y-1 rounded-[0.875rem] bg-ivory p-3 text-sm sm:grid-cols-[6rem_1fr]" aria-label="공유 내용 확인">
+                    <dt className="font-bold text-ink-soft">기록</dt>
+                    <dd className="text-ink">{record && prescriptionLabel(record, itemsOf(rx, record.id).length)}</dd>
+                    <dt className="font-bold text-ink-soft">사람</dt>
+                    <dd className="text-ink">
+                      {grants.find((g) => g.granteeId === grantee)
+                        ? personName(
+                            snapshot,
+                            grants.find((g) => g.granteeId === grantee)!,
+                          )
+                        : ""}
+                    </dd>
+                    <dt className="font-bold text-ink-soft">보이는 항목</dt>
+                    <dd className="text-ink">제품명·날짜{fields.length ? `, ${fields.map((f) => SHARE_FIELD_LABEL[f]).join(", ")}` : ""}</dd>
+                    <dt className="font-bold text-ink-soft">기간</dt>
+                    <dd className="text-ink">{PERIODS.find((p) => p.value === period)?.label}</dd>
+                  </dl>
+                  <div className="rounded-2xl border border-dashed border-brand-300 p-3" aria-label="상대에게 보이는 내용 미리 보기">
+                    <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-brand-800">
+                      <Eye className="h-4 w-4" aria-hidden /> 상대에게 이렇게 보여요
+                    </p>
+                    <SharedRecordCard r={preview} />
+                  </div>
+                </div>
+              )}
+
               <Alert>{action.error}</Alert>
-              <Notice>{notice}</Notice>
-              <PButton
-                className="w-full"
-                icon={Share2}
-                disabled={!record || !grantee || action.pending}
-                onClick={async () => {
-                  const days = PERIODS.find((p) => p.value === period)?.days ?? null;
-                  const expiresAt = days ? new Date(Date.now() + days * 86_400_000).toISOString() : null;
-                  const r = await action.run(() => rxStore.shareRecord({ patientId, prescriptionId: recordId, granteeId: grantee, fields, expiresAt }));
-                  if (r.ok) setNotice("공유했어요. 아래 ‘공유 중인 기록’에서 언제든 멈출 수 있어요.");
-                }}
-              >
-                이 기록 공유하기
-              </PButton>
+              <div className="flex flex-wrap gap-2">
+                {step > 1 && (
+                  <PButton variant="secondary" size="md" icon={ChevronLeft} onClick={() => setStep((x) => x - 1)}>
+                    이전
+                  </PButton>
+                )}
+                {step < 4 ? (
+                  <PButton
+                    size="md"
+                    className="flex-1"
+                    disabled={(step === 1 && !record) || (step === 2 && !grantee)}
+                    onClick={() => {
+                      setNotice(null);
+                      setStep((x) => x + 1);
+                    }}
+                  >
+                    다음 <ChevronRight className="h-5 w-5" aria-hidden />
+                  </PButton>
+                ) : (
+                  <PButton
+                    size="md"
+                    className="flex-1"
+                    icon={Share2}
+                    disabled={!record || !grantee || action.pending}
+                    onClick={async () => {
+                      const days = PERIODS.find((p) => p.value === period)?.days ?? null;
+                      const expiresAt = days ? new Date(Date.now() + days * 86_400_000).toISOString() : null;
+                      const r = await action.run(() => rxStore.shareRecord({ patientId, prescriptionId: recordId, granteeId: grantee, fields, expiresAt }));
+                      if (r.ok) {
+                        setNotice("공유했어요. 아래 ‘공유 중인 기록’에서 언제든 멈출 수 있어요.");
+                        setStep(1);
+                        setRecordId("");
+                      }
+                    }}
+                  >
+                    이 기록 공유하기
+                  </PButton>
+                )}
+              </div>
             </div>
           )}
         </PCard>

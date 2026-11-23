@@ -11,6 +11,7 @@ test("저장 실패: 오류 안내 후 입력한 내용 유지, 실패한 기록
   await openApp(page);
   // 컨디션 기록은 진료 준비 → 컨디션 기록 열기 (메뉴에서는 빠졌지만 기능은 보존)
   await menu(page, "진료 준비").click();
+  await page.getByRole("button", { name: /^최근 2주 컨디션 요약/ }).click(); // 접혀 있는 섹션 펼치기
   await page.getByRole("button", { name: "컨디션 기록 열기" }).click();
   await page.getByRole("button", { name: /^이 날짜 (기록하기|의 기록 수정)$/ }).click();
   const dlg = page.getByRole("dialog", { name: /기록 (작성|수정)$/ });

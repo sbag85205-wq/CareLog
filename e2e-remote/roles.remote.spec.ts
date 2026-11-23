@@ -136,6 +136,7 @@ test("1. 환자 A: 지금 복용 중 홈 → 오늘 기록 → 내 약 → 진�
 
   // 건강 기록
   await menu(page, "진료 준비").click();
+  await page.getByRole("button", { name: /^최근 2주 컨디션 요약/ }).click(); // 접힌 섹션 펼치기
   await page.getByRole("button", { name: "컨디션 기록 열기" }).click(); // 건강 기록은 메뉴에서 빠지고 진료 준비에서 열기
   await expect(page.getByRole("heading", { name: "건강 기록" })).toBeVisible();
   await shot(page, "m-patient-records");

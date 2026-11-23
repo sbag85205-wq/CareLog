@@ -53,7 +53,13 @@ test.describe("공개 데모 — 모바일", () => {
     await expect(page.getByText("약 이름은 잊어도, 내 몸의 경험은 잊지 않도록.")).toBeVisible();
     await expect(page.getByRole("button", { name: "약 등록하기" })).toBeVisible();
     await expect(page.getByRole("button", { name: "내가 먹었던 약 찾기" })).toBeVisible();
-    await expect(page.getByRole("navigation", { name: "메뉴" }).getByRole("button")).toHaveText(["홈", "나의 약 기록", "내 몸의 반응", "함께 보기", "진료 준비"]);
+    await expect(page.getByRole("navigation", { name: "메뉴" }).getByRole("button")).toHaveText([
+      "홈",
+      "나의 약 기록",
+      "내 몸의 반응",
+      "함께 보기",
+      "진료 준비",
+    ]);
     for (const hidden of ["통원 중", "입원 중", "생활 요청", "오늘 식사"]) await expect(page.getByText(hidden, { exact: true })).toHaveCount(0);
     await expectNoHorizontalOverflow(page);
     console.expectNone();
@@ -148,7 +154,10 @@ test.describe("공개 데모 — 모바일", () => {
     await openApp(page);
     await page.getByRole("button", { name: "내가 먹었던 약 찾기" }).click();
     await page.getByRole("group", { name: "보는 방법" }).getByRole("button", { name: "처방·등록별로" }).click();
-    await page.getByRole("region", { name: "날짜별 기록" }).getByRole("button", { name: /처방 · 이비인후과 · 약 3개$/ }).click();
+    await page
+      .getByRole("region", { name: "날짜별 기록" })
+      .getByRole("button", { name: /처방 · 이비인후과 · 약 3개$/ })
+      .click();
     const d = detail(page);
     const whole = d.getByRole("list", { name: "복용 경험 목록" }).getByLabel("복용 경험: 처방 전체");
     await whole.getByRole("button", { name: "다음 진료 질문에 담기" }).click();
@@ -181,10 +190,28 @@ test.describe("공개 데모 — 모바일", () => {
     await switchRole(page, "나");
 
     await menu(page, "함께 보기").click();
-    await page.getByLabel("공유할 기록").selectOption("OTC-DEMO-2");
+    const steps = page.getByRole("list", { name: /^진행 상태:/ });
+    await expect(steps).toHaveAccessibleName("진행 상태: ① 기록");
+    const next = page.getByRole("button", { name: "다음" });
+    await expect(next).toBeDisabled(); // 기록을 고르기 전에는 다음으로 못 감
+    await page
+      .getByRole("radiogroup", { name: "공유할 기록" })
+      .getByRole("radio", { name: /가상이부펜정200밀리그램/ })
+      .check();
+    await next.click();
+    await expect(steps).toHaveAccessibleName("진행 상태: ② 사람");
+    await next.click();
+    await expect(steps).toHaveAccessibleName("진행 상태: ③ 항목·기간");
     const fields = page.getByRole("group", { name: "보여 줄 항목" });
     await expect(fields.getByRole("button", { name: "복용 경험 (태그·메모)" })).toHaveAttribute("aria-pressed", "true");
     await expect(fields.getByRole("button", { name: "진료과·병원 (처방)" })).toHaveCount(0); // 일반약에는 없음
+    await next.click();
+    await expect(steps).toHaveAccessibleName("진행 상태: ④ 확인·공유");
+    await expect(page.getByLabel("공유 내용 확인")).toContainText("복용 경험 (태그·메모)");
+    // 이전으로 돌아가도 고른 내용 유지
+    await page.getByRole("button", { name: "이전" }).click();
+    await expect(fields.getByRole("button", { name: "복용 경험 (태그·메모)" })).toHaveAttribute("aria-pressed", "true");
+    await next.click();
     const preview = page.getByLabel("상대에게 보이는 내용 미리 보기");
     await expect(preview.getByText("가상이부펜정200밀리그램", { exact: true })).toBeVisible();
     await expect(preview.getByText(/성분 /)).toHaveCount(0);
@@ -210,7 +237,11 @@ test.describe("공개 데모 — 모바일", () => {
 
     // 다시 공유한 뒤 연결 자체를 끊으면 모든 공유가 멈춤
     await switchRole(page, "나");
-    await page.getByLabel("공유할 기록").selectOption("OTC-DEMO-1");
+    await page
+      .getByRole("radiogroup", { name: "공유할 기록" })
+      .getByRole("radio", { name: /일반약 · 가상약국 · 제품 1개/ })
+      .check();
+    for (let i = 0; i < 3; i++) await page.getByRole("button", { name: "다음" }).click();
     await page.getByRole("button", { name: "이 기록 공유하기" }).click();
     await expect(page.getByRole("heading", { name: "공유 중인 기록 · 1건" })).toBeVisible();
     await page.getByText("사람 초대 · 연결 관리").click();
@@ -241,12 +272,15 @@ test.describe("공개 데모 — 모바일", () => {
 
     // 이전 처방(이비인후과)도 그대로 열림
     await page.getByRole("button", { name: "목록으로" }).click();
-    await page.getByRole("region", { name: "날짜별 기록" }).getByRole("button", { name: /처방 · 이비인후과 · 약 3개$/ }).click();
+    await page
+      .getByRole("region", { name: "날짜별 기록" })
+      .getByRole("button", { name: /처방 · 이비인후과 · 약 3개$/ })
+      .click();
     await expect(detail(page).getByText("(가상) 아침까지 졸렸어요.")).toBeVisible();
 
     // 오늘 복용 체크: 정기 약만 시간대 칸, 일반약 등록은 없음
     await menu(page, "홈").click();
-    const check = page.getByLabel("오늘 복용 체크");
+    const check = page.getByLabel("오늘 복용 체크", { exact: true });
     await expect(check.getByText(/안 먹었다는 뜻이 아니에요/)).toBeVisible();
     await expect(check.getByText("가상진통정500밀리그램")).toHaveCount(0);
     const bp = check.getByLabel("복용 체크: 가상혈압정5밀리그램");
@@ -264,11 +298,18 @@ test.describe("공개 데모 — 모바일", () => {
     await page.getByText(/예전 방식으로 적어 둔 약/).click();
     const legacy = page.getByRole("list", { name: "약 목록" });
     while ((await legacy.getByRole("button", { name: / 삭제$/ }).count()) > 0) {
-      await legacy.getByRole("button", { name: / 삭제$/ }).first().click();
+      await legacy
+        .getByRole("button", { name: / 삭제$/ })
+        .first()
+        .click();
       await legacy.getByRole("button", { name: "삭제", exact: true }).click();
     }
     // ★ 한 번으로 약 기록을 브라우저에 저장한 뒤, '복용 중'을 모두 끔 (가상 데이터, 이 브라우저만)
-    await page.getByRole("region", { name: "찾은 약" }).getByRole("button", { name: / 보관$/ }).first().click();
+    await page
+      .getByRole("region", { name: "찾은 약" })
+      .getByRole("button", { name: / 보관$/ })
+      .first()
+      .click();
     await page.evaluate((key) => {
       const d = JSON.parse(localStorage.getItem(key) ?? "null");
       d.items = d.items.map((i: { active: boolean }) => ({ ...i, active: false }));
@@ -276,12 +317,13 @@ test.describe("공개 데모 — 모바일", () => {
     }, RX_KEY);
     await page.reload({ waitUntil: "networkidle" });
     await expect(page.getByText(/지금 먹는 약이 없어도 괜찮아요/)).toBeVisible();
-    await expect(page.getByLabel("오늘 복용 체크")).toHaveCount(0);
+    await expect(page.getByLabel("오늘 복용 체크", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "내가 먹었던 약 찾기" }).click();
+    await page.getByRole("button", { name: /^상세 필터/ }).click();
     await page.getByRole("group", { name: "복용 상태" }).getByRole("button", { name: "과거 복용 기록" }).click();
     await expect(page.getByRole("region", { name: "찾은 약" }).getByRole("heading", { name: /찾은 약 · \d+개/ })).toBeVisible();
     await menu(page, "내 몸의 반응").click();
-    await expect(page.getByRole("region", { name: "같은 약을 여러 번 기록" }).getByLabel("가상진통정500밀리그램 날짜별 경험")).toBeVisible();
+    await expect(page.getByRole("region", { name: "약별 요약" }).getByLabel("약별 요약: 가상진통정500밀리그램")).toBeVisible();
 
     await page.getByRole("button", { name: "초기화" }).click();
     await page.getByRole("button", { name: "처음 상태로 되돌리기" }).click();
