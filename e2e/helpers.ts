@@ -29,6 +29,7 @@ export async function setDevFlags(page: Page, flags: { latencyMs?: number; failW
 
 /** 공개 데모(/demo) 열기 — 로그인 없이 환자 홈 */
 export async function openApp(page: Page) {
+  await hideDevOverlay(page);
   await page.goto("/demo", { waitUntil: "networkidle" });
   await page.getByText("님, 안녕하세요").first().waitFor();
 }
@@ -53,4 +54,17 @@ export async function switchMode(page: Page, mode: "통원" | "입원") {
 export async function switchRole(page: Page, role: "환자" | "의료진" | "보호자") {
   await page.getByRole("tablist", { name: "데모 역할" }).getByRole("tab", { name: role }).click();
   await expect(page.getByRole("tablist", { name: "데모 역할" }).getByRole("tab", { name: role })).toHaveAttribute("aria-selected", "true");
+}
+
+/** 개발 서버의 Next.js 개발 도구 배지가 모바일 하단 메뉴(홈)를 가리지 않게 숨김 (테스트 전용) */
+export async function hideDevOverlay(page: Page) {
+  await page.addInitScript(() => {
+    const add = () => {
+      const st = document.createElement("style");
+      st.textContent = "nextjs-portal{display:none!important}";
+      document.head.appendChild(st);
+    };
+    if (document.head) add();
+    else document.addEventListener("DOMContentLoaded", add);
+  });
 }

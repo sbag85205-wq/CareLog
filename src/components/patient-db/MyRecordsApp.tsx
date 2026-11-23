@@ -1,33 +1,36 @@
 "use client";
 
 import { CalendarCheck, ChartNoAxesColumn, House, Pill, UsersRound } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MealsSection, RequestsSection } from "@/components/patient-db/CareSections";
-import { MedicationsView } from "@/components/patient-db/MedicationsView";
 import { PatientConditionForm } from "@/components/patient-db/PatientConditionForm";
 import { PatientRecordsView } from "@/components/patient-db/PatientRecordsView";
 import { ShareView } from "@/components/patient-db/ShareView";
 import { VisitPrepView } from "@/components/patient-db/VisitPrepView";
 import { AppShell, type ShellTab } from "@/components/patient-ui/AppShell";
+import { MyMedsView, type MedsView } from "@/components/rx/MyMedsView";
+import { RxHome } from "@/components/rx/RxHome";
 import { Alert, cn, PButton, PCard, Segmented, SoftSheet, StatusPill, TextField } from "@/components/patient-ui/kit";
 import { CONDITION_WORD, SLEEP_WORD } from "@/components/patient-ui/labels";
 import { RepositoryProvider } from "@/hooks/repository-context";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useDbApp } from "@/hooks/useDbApp";
 import { formatKoreanDate, formatKoreanTime, formatLongKoreanDate, lastNDates, todayISO } from "@/lib/date";
-import { currentAdmission } from "@/lib/domain/admissions";
 import { MODE_LABEL, roomLabel } from "@/lib/labels";
 import type { DbSnapshot, SupabaseRepository } from "@/lib/repository/supabase";
-import { admissionsOf, medicationsOf, questionsOf, recordsOf } from "@/lib/selectors";
+import { RxStoreProvider, useRxSnapshot, useRxStore } from "@/lib/rx/store";
+import { createSupabaseRxStore } from "@/lib/rx/supabase-store";
+import { getBrowserClient } from "@/lib/supabase/browser";
+import { admissionsOf, questionsOf, recordsOf } from "@/lib/selectors";
 import type { Admission, CareMode, HealthRecord, Patient } from "@/types";
 
 export type PatientTab = "home" | "records" | "meds" | "visit" | "share";
 type Tab = PatientTab;
 export const PATIENT_TABS: ShellTab<Tab>[] = [
   { id: "home", label: "홈", icon: House },
-  { id: "records", label: "기록 보기", icon: ChartNoAxesColumn },
   { id: "meds", label: "내 약", icon: Pill },
   { id: "visit", label: "진료 준비", icon: CalendarCheck },
+  { id: "records", label: "건강 기록", icon: ChartNoAxesColumn },
   { id: "share", label: "보호자 공유", icon: UsersRound },
 ];
 
@@ -36,6 +39,11 @@ export function MyRecordsApp() {
   const { repo, snapshot, loadState, ready, logout } = useDbApp("patient");
   const [tab, setTab] = useState<Tab>("home");
   const patient = snapshot?.patients[0];
+  // 처방 이력 (본인 세션 → RLS). migration 10 이 없는 DB에서는 '준비 중'으로 알리고 기존 기능 유지
+  const rxStore = useMemo(() => (ready ? createSupabaseRxStore(getBrowserClient()!) : null), [ready]);
+  useEffect(() => {
+    void rxStore?.load();
+  }, [rxStore]);
 
   return (
     <AppShell
@@ -51,7 +59,9 @@ export function MyRecordsApp() {
     >
       {ready && patient && repo && snapshot && (
         <RepositoryProvider value={repo}>
-          <PatientTabs tab={tab} setTab={setTab} snapshot={snapshot} patient={patient} repo={repo} />
+          <RxStoreProvider value={rxStore}>
+            <PatientTabs tab={tab} setTab={setTab} snapshot={snapshot} patient={patient} repo={repo} />
+          </RxStoreProvider>
         </RepositoryProvider>
       )}
     </AppShell>
@@ -78,31 +88,90 @@ export function PatientTabs({
   const today = todayISO();
   const records = recordsOf(snapshot, patient.id);
   const admissions = admissionsOf(snapshot, patient.id);
+  const rxStore = useRxStore();
+  const rx = useRxSnapshot(rxStore);
+  // 홈 → 내 약 이동 시 (처방 상세 열기 · 처방전 등록 바로 시작)
+  const [medsNav, setMedsNav] = useState<{
+    view: MedsView;
+    selected: string | null;
+    importing: boolean;
+    n: number;
+  }>({ view: "current", selected: null, importing: false, n: 0 });
+  const go = (t: Tab) => {
+    setTab(t);
+    window.scrollTo({ top: 0 });
+  };
   switch (tab) {
     case "records":
-      return <PatientRecordsView patient={patient} records={records} today={today} admissions={admissions} />;
+      return (
+        <PatientRecordsView
+          patient={patient}
+          records={records}
+          today={today}
+          admissions={admissions}
+          title="건강 기록"
+          sub="필요할 때 컨디션 기록을 열어 봐요."
+        />
+      );
     case "meds":
-      return <MedicationsView medications={medicationsOf(snapshot, patient.id)} patientId={patient.id} repo={repo} editable demo={demo} />;
+      return (
+        <MyMedsView
+          key={medsNav.n}
+          snapshot={snapshot}
+          rx={rx}
+          rxStore={rxStore}
+          patient={patient}
+          repo={repo}
+          today={today}
+          demo={demo}
+          initialView={medsNav.view}
+          initialSelected={medsNav.selected}
+          startImport={medsNav.importing}
+        />
+      );
     case "visit":
-      return <VisitPrepView patient={patient} records={records} questions={questionsOf(snapshot, patient.id)} today={today} repo={repo} />;
+      return <VisitPrepView patient={patient} records={records} questions={questionsOf(snapshot, patient.id)} today={today} repo={repo} rx={rx} />;
     case "share":
       return <ShareView snapshot={snapshot} patientId={patient.id} repo={repo} />;
     default:
       return (
-        <HomeView
+        <RxHome
           snapshot={snapshot}
+          rx={rx}
           patient={patient}
-          today={today}
-          records={records}
-          admission={currentAdmission(snapshot, patient.id)}
           repo={repo}
-          onShowRecords={() => {
-            setTab("records");
-            window.scrollTo({ top: 0 });
+          today={today}
+          demo={demo}
+          goMeds={(id) => {
+            setMedsNav((c) => ({
+              view: id ? "history" : "current",
+              selected: id ?? null,
+              importing: false,
+              n: c.n + 1,
+            }));
+            go("meds");
           }}
+          goImport={() => {
+            setMedsNav((c) => ({
+              view: "current",
+              selected: null,
+              importing: true,
+              n: c.n + 1,
+            }));
+            go("meds");
+          }}
+          goRecords={() => go("records")}
         />
       );
   }
+}
+
+/**
+ * 이전 버전 홈 (통원·입원 전환·식사·생활 요청) — 새 버전 홈에서는 쓰지 않지만 코드는 보존
+ * (병동 흐름을 다시 켤 때 PatientTabs 의 홈에서 이 컴포넌트를 사용)
+ */
+export function LegacyHomeView(props: Parameters<typeof HomeView>[0]) {
+  return <HomeView {...props} />;
 }
 
 function HomeView({
@@ -163,12 +232,8 @@ function HomeView({
           <p className="text-ink-soft">{formatLongKoreanDate(today)}</p>
           <StatusPill tone="outline">{MODE_LABEL[patient.careMode]} 중</StatusPill>
         </div>
-        <h1 className="mt-3 text-[1.75rem] leading-tight font-extrabold tracking-tight break-keep text-ink sm:text-3xl">
-          {patient.name} 님, 안녕하세요.
-        </h1>
-        <p className="mt-1.5 text-ink-soft">
-          {todayRecord ? "오늘 기록이 있어요. 다시 저장하면 수정됩니다." : "오늘의 작은 변화도 소중한 기록이에요."}
-        </p>
+        <h1 className="mt-3 text-[1.75rem] leading-tight font-extrabold tracking-tight break-keep text-ink sm:text-3xl">{patient.name} 님, 안녕하세요.</h1>
+        <p className="mt-1.5 text-ink-soft">{todayRecord ? "오늘 기록이 있어요. 다시 저장하면 수정됩니다." : "오늘의 작은 변화도 소중한 기록이에요."}</p>
         <div className="mt-4 max-w-sm">
           <Segmented
             ariaLabel="이용 모드"
@@ -208,11 +273,7 @@ function HomeView({
                   </PButton>
                 </div>
               </PCard>
-              <button
-                type="button"
-                onClick={onShowRecords}
-                className="w-full rounded-[1.75rem] border border-line bg-white p-5 text-left hover:bg-sage-50"
-              >
+              <button type="button" onClick={onShowRecords} className="w-full rounded-[1.75rem] border border-line bg-white p-5 text-left hover:bg-sage-50">
                 <p className="font-bold text-ink">통원 때의 기록도 그대로 이어져요.</p>
                 <p className="mt-1 text-sm text-ink-soft">기록 보기에서 모든 모드를 함께 확인해요. →</p>
               </button>
@@ -277,17 +338,7 @@ function HomeView({
 }
 
 /** 통원↔입원 전환 (환자 자기기록 — 병원의 공식 입원 확인이 아님) */
-function CareModeSheet({
-  target,
-  patient,
-  repo,
-  onClose,
-}: {
-  target: CareMode | null;
-  patient: Patient;
-  repo: SupabaseRepository;
-  onClose: () => void;
-}) {
+function CareModeSheet({ target, patient, repo, onClose }: { target: CareMode | null; patient: Patient; repo: SupabaseRepository; onClose: () => void }) {
   const [ward, setWard] = useState("");
   const [room, setRoom] = useState("");
   const action = useAsyncAction();

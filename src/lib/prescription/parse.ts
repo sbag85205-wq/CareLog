@@ -5,6 +5,8 @@
  * OCR 결과는 줄이 섞이거나 글자가 틀릴 수 있어, 확실하지 않은 값은 비워 두고 사용자가 확인·수정합니다.
  */
 
+import { DEPARTMENTS } from "@/lib/rx/model";
+
 export interface ParsedDrug {
   /** 화면 구분용 */
   key: string;
@@ -155,5 +157,76 @@ export function toFormFields(d: ParsedDrug) {
     dosage: d.dose ? `1회 ${d.dose}${unit}` : "",
     schedule: [d.timesPerDay ? `하루 ${d.timesPerDay}회` : "", d.usage ?? ""].filter(Boolean).join(" · "),
     duration: d.days ? `${d.days}일분` : "",
+  };
+}
+
+/* ───────────── 처방전 머리 정보: 처방일·진료과·의료기관·복약 안내 ───────────── */
+
+
+export interface PrescriptionMeta {
+  /** YYYY-MM-DD — 교부·처방·발행 날짜가 명확할 때만 */
+  prescribedOn?: string;
+  /** 진료과가 하나로 명확할 때만 (아니면 비워서 환자가 고름) */
+  department?: string;
+  clinic?: string;
+  /** 처방전·복약 안내의 주의사항 줄 */
+  guidance?: string;
+}
+
+const DATE = /(20\d{2}|19\d{2})\s*[.\-/년]\s*(\d{1,2})\s*[.\-/월]\s*(\d{1,2})\s*일?/;
+
+function toIsoDate(m: RegExpMatchArray): string | undefined {
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return undefined;
+  return dt.toISOString().slice(0, 10);
+}
+
+export function parsePrescriptionMeta(text: string): PrescriptionMeta {
+  const lines = text.split(/\r?\n/).map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+  const meta: PrescriptionMeta = {};
+
+  // 처방일: 교부·처방·발행 줄의 날짜 우선, 없으면 생년월일·주민번호가 아닌 첫 날짜
+  const dated = lines.filter((l) => DATE.test(l) && !/생년|주민|출생/.test(l));
+  const preferred = dated.find((l) => /교부|처방|발행/.test(l)) ?? dated.find((l) => !/조제/.test(l)) ?? dated[0];
+  if (preferred) meta.prescribedOn = toIsoDate(preferred.match(DATE)!);
+
+  // 진료과: '진료과' 표시 줄 → 전체에서 한 가지만 나올 때 (긴 이름 먼저: 정형외과 ⊃ 외과)
+  const ordered = [...DEPARTMENTS].sort((a, b) => b.length - a.length);
+  const findDepts = (s: string) => {
+    let rest = s;
+    const found = new Set<string>();
+    for (const d of ordered) {
+      if (rest.includes(d)) {
+        found.add(d);
+        rest = rest.split(d).join(" ");
+      }
+    }
+    return [...found];
+  };
+  const labeled = lines.find((l) => /진료\s*과/.test(l));
+  const fromLabel = labeled ? findDepts(labeled) : [];
+  const all = findDepts(lines.join(" "));
+  if (fromLabel.length === 1) meta.department = fromLabel[0];
+  else if (all.length === 1) meta.department = all[0];
+
+  const clinic = lines.map((l) => l.match(/(?:의료기관|요양기관)\s*(?:명칭|명|이름)?\s*[:：]?\s*(.+)$/)?.[1]).find(Boolean);
+  if (clinic) meta.clinic = clinic.replace(/전화.*$/, "").trim().slice(0, 60);
+
+  const guidance = lines.filter((l) => /주의|복약\s*안내|졸음|운전|음주|임부|수유/.test(l) && !/처방\s*의약품|명칭/.test(l)).slice(0, 4);
+  if (guidance.length) meta.guidance = guidance.join("\n").slice(0, 1000);
+  return meta;
+}
+
+/** 처방 이력 미리보기 칸 — 횟수와 시점을 나눠서 (처방전에 없는 값은 빈칸) */
+export function toRxFields(d: ParsedDrug) {
+  const f = toFormFields(d);
+  return {
+    name: f.name,
+    strength: f.strength,
+    dosage: f.dosage,
+    frequency: d.timesPerDay ? `하루 ${d.timesPerDay}회` : "",
+    timing: d.usage ?? "",
+    duration: f.duration,
   };
 }

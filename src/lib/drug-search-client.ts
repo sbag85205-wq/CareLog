@@ -46,3 +46,28 @@ export const DrugSearchProvider = DrugSearchContext.Provider;
 export function useDrugSearch(): DrugSearchFn {
   return useContext(DrugSearchContext);
 }
+
+/** 고른 제품의 식약처 주의사항(요약) — 서버만 외부 호출, 품목기준코드만 전송 */
+export type DrugCautionFn = (itemSeq: string) => Promise<{ ok: true; caution: string } | { ok: false; message: string }>;
+
+export const apiDrugCaution: DrugCautionFn = async (itemSeq) => {
+  try {
+    const res = await fetch("/api/medications/caution", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itemSeq }),
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    const r = (await res.json()) as { ok: boolean; caution?: string; message?: string };
+    return r.ok ? { ok: true, caution: r.caution ?? "" } : { ok: false, message: r.message ?? "식약처 주의사항을 가져오지 못했어요." };
+  } catch {
+    return { ok: false, message: "식약처 주의사항을 가져오지 못했어요." };
+  }
+};
+
+const DrugCautionContext = createContext<DrugCautionFn>(apiDrugCaution);
+export const DrugCautionProvider = DrugCautionContext.Provider;
+export function useDrugCaution(): DrugCautionFn {
+  return useContext(DrugCautionContext);
+}

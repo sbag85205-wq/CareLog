@@ -11,6 +11,7 @@ import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useDbApp } from "@/hooks/useDbApp";
 import { formatDateTime, formatKoreanDate, todayISO } from "@/lib/date";
 import { nextRequestStatus } from "@/lib/domain/request-status";
+import { FEATURES } from "@/lib/features";
 import { MODE_LABEL, REQUEST_STATUS_LABEL, roomLabel, TRIAGE_LABEL } from "@/lib/labels";
 import type { DbSnapshot, SupabaseRepository } from "@/lib/repository/supabase";
 import { admissionsOf, medicationsOf, questionsOf, recordsOf, requestsForStaff, reviewsOf } from "@/lib/selectors";
@@ -21,7 +22,7 @@ export type StaffTab = "patients" | "requests";
 type Tab = StaffTab;
 export const STAFF_TABS: ShellTab<Tab>[] = [
   { id: "patients", label: "담당 환자", icon: UsersRound },
-  { id: "requests", label: "생활 요청", icon: BellRing },
+  ...(FEATURES.WARD ? [{ id: "requests" as const, label: "생활 요청", icon: BellRing }] : []),
 ];
 
 const FLAG_TONE: Record<TriageFlag, "warn" | "outline" | "ivory" | "sage"> = {
@@ -30,7 +31,10 @@ const FLAG_TONE: Record<TriageFlag, "warn" | "outline" | "ivory" | "sage"> = {
   insufficient: "ivory",
   stable: "sage",
 };
-const REVIEW_LABEL: Record<ReviewAction, string> = { checked: "확인 완료", consult_needed: "진료 상담 필요" };
+const REVIEW_LABEL: Record<ReviewAction, string> = {
+  checked: "확인 완료",
+  consult_needed: "진료 상담 필요",
+};
 
 /** 로그인 버전 — 간호사·의료진 (담당 환자만, RLS 적용) */
 export function StaffApp() {
@@ -72,7 +76,7 @@ export function StaffContent({
   selected: string | null;
   setSelected: (id: string | null) => void;
 }) {
-  if (tab === "requests") return <StaffRequests snapshot={snapshot} repo={repo} />;
+  if (tab === "requests" && FEATURES.WARD) return <StaffRequests snapshot={snapshot} repo={repo} />;
   if (selected && snapshot.patients.some((p) => p.id === selected)) {
     return <StaffPatientDetail snapshot={snapshot} patientId={selected} repo={repo} onBack={() => setSelected(null)} />;
   }
@@ -92,11 +96,11 @@ function PatientList({ snapshot, onOpen }: { snapshot: DbSnapshot; onOpen: (id: 
   const openRequests = requestsForStaff(snapshot, snapshot.viewer.userId).filter((r) => r.status !== "completed").length;
   return (
     <div className="space-y-5">
-      <PageTitle title="담당 환자" sub={`${summaries.length}명 · 진행 중인 생활 요청 ${openRequests}건`} />
+      <PageTitle title="담당 환자" sub={FEATURES.WARD ? `${summaries.length}명 · 진행 중인 생활 요청 ${openRequests}건` : `${summaries.length}명`} />
       <PCard tone="ivory">
         <p className="text-xs leading-relaxed text-ink-soft">
-          시연용 분류예요 (의료적 판정 아님). 검토 대상: 30일 평균 ≤ {TRIAGE_RULES.reviewAvgMax} 이고 {TRIAGE_RULES.reviewMinDays}일 이상 기록 ·
-          기록 부족: 30일 {TRIAGE_RULES.insufficientDays30}일 미만 또는 7일 {TRIAGE_RULES.insufficientDays7}일 미만 · 변화 확인: 7일 평균과 이전 평균 차이 ≥{" "}
+          시연용 분류예요 (의료적 판정 아님). 검토 대상: 30일 평균 ≤ {TRIAGE_RULES.reviewAvgMax} 이고 {TRIAGE_RULES.reviewMinDays}일 이상 기록 · 기록 부족: 30일{" "}
+          {TRIAGE_RULES.insufficientDays30}일 미만 또는 7일 {TRIAGE_RULES.insufficientDays7}일 미만 · 변화 확인: 7일 평균과 이전 평균 차이 ≥{" "}
           {TRIAGE_RULES.changeDelta}
         </p>
       </PCard>
@@ -127,10 +131,12 @@ function PatientRow({ s, onOpen }: { s: PatientSummary; onOpen: () => void }) {
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-lg font-bold text-ink">{s.patient.name}</p>
-        <StatusPill tone="outline">
-          {MODE_LABEL[s.patient.careMode]}
-          {s.admission && s.admission.room !== "미입력" ? ` · ${roomLabel(s.admission.room)}` : ""}
-        </StatusPill>
+        {FEATURES.WARD && (
+          <StatusPill tone="outline">
+            {MODE_LABEL[s.patient.careMode]}
+            {s.admission && s.admission.room !== "미입력" ? ` · ${roomLabel(s.admission.room)}` : ""}
+          </StatusPill>
+        )}
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
         {s.flags.map((f) => (
@@ -166,10 +172,16 @@ function StaffPatientDetail({ snapshot, patientId, repo, onBack }: { snapshot: D
   const today = todayISO();
   const shared = questionsOf(snapshot, patientId); // RLS: 환자가 공유한 질문만 내려옴
   const reviews = reviewsOf(snapshot, patientId);
-  const requests = requestsForStaff(snapshot, snapshot.viewer.userId).filter((r) => r.patientId === patientId).slice(0, 6);
+  const requests = requestsForStaff(snapshot, snapshot.viewer.userId)
+    .filter((r) => r.patientId === patientId)
+    .slice(0, 6);
   return (
     <div className="space-y-6">
-      <button type="button" onClick={onBack} className="-ml-2 inline-flex min-h-10 items-center gap-0.5 rounded-xl px-2 text-ink-soft hover:bg-ivory-deep hover:text-ink">
+      <button
+        type="button"
+        onClick={onBack}
+        className="-ml-2 inline-flex min-h-10 items-center gap-0.5 rounded-xl px-2 text-ink-soft hover:bg-ivory-deep hover:text-ink"
+      >
         <ChevronLeft className="h-5 w-5" aria-hidden /> 담당 환자 목록
       </button>
       <PatientRecordsView
@@ -179,7 +191,7 @@ function StaffPatientDetail({ snapshot, patientId, repo, onBack }: { snapshot: D
         today={today}
         readOnly
         title={`${patient.name} 님`}
-        sub={`${MODE_LABEL[patient.careMode]} 중 · 다음 진료 ${patient.nextVisitDate ? formatKoreanDate(patient.nextVisitDate, false) : "미정"} · 기록은 환자 본인만 수정할 수 있어요`}
+        sub={`${FEATURES.WARD ? `${MODE_LABEL[patient.careMode]} 중 · ` : ""}다음 진료 ${patient.nextVisitDate ? formatKoreanDate(patient.nextVisitDate, false) : "미정"} · 기록은 환자 본인만 수정할 수 있어요`}
       />
 
       <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
@@ -199,7 +211,7 @@ function StaffPatientDetail({ snapshot, patientId, repo, onBack }: { snapshot: D
               </ul>
             )}
           </PCard>
-          {requests.length > 0 && (
+          {FEATURES.WARD && requests.length > 0 && (
             <section aria-label="이 환자의 생활 요청" className="space-y-3">
               <h2 className="px-1 text-xl font-bold text-ink">생활 요청</h2>
               {requests.map((r) => (
@@ -210,7 +222,7 @@ function StaffPatientDetail({ snapshot, patientId, repo, onBack }: { snapshot: D
         </div>
       </div>
 
-      {patient.careMode === "inpatient" && <MealsSection snapshot={snapshot} patientId={patientId} readOnly />}
+      {FEATURES.WARD && patient.careMode === "inpatient" && <MealsSection snapshot={snapshot} patientId={patientId} readOnly />}
       <MedicationsView
         medications={medicationsOf(snapshot, patientId)}
         patientId={patientId}
@@ -285,7 +297,10 @@ function StaffRequests({ snapshot, repo }: { snapshot: DbSnapshot; repo: Supabas
         <Segmented
           ariaLabel="요청 상태"
           items={[
-            { value: "open" as const, label: `진행 중 ${all.filter((r) => r.status !== "completed").length}` },
+            {
+              value: "open" as const,
+              label: `진행 중 ${all.filter((r) => r.status !== "completed").length}`,
+            },
             { value: "done" as const, label: "처리 완료" },
           ]}
           value={filter}

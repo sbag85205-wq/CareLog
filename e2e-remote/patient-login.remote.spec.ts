@@ -14,7 +14,7 @@ import {
   assignStaff,
   cleanup,
   expectNoHorizontalOverflow,
-  fillCondition,
+  expectTodayCondition,
   memberLoginForm,
   menu,
   patientLogin,
@@ -22,6 +22,7 @@ import {
   provisionLegacyPatient,
   provisionMember,
   provisionPatient,
+  recordCondition,
   randLoginId,
   randPassword,
   shot,
@@ -140,9 +141,7 @@ test("1. 관리자: 웹에서 신규 환자 등록 (아이디·초기 비밀번�
 test("2. 신규 환자: 배포 주소 → 아이디 로그인 → 기록 저장 → 관리자 비밀번호 재설정 → 이전 비밀번호 거부 → 새 비밀번호로 같은 기록", async ({ browser }) => {
   const page = await newPage(browser);
   await patientLogin(page, N);
-  await fillCondition(page, 4);
-  await page.getByRole("button", { name: "기록 저장" }).click();
-  await expect(page.getByText("저장되었습니다")).toBeVisible();
+  await recordCondition(page, 4);
   await expectNoHorizontalOverflow(page);
   const before = (await (await userSession(N.email, N.password)).from("health_records").select("id, condition").eq("patient_id", N.pid)).data;
   expect(before).toEqual([expect.objectContaining({ condition: 4 })]);
@@ -157,7 +156,7 @@ test("2. 신규 환자: 배포 주소 → 아이디 로그인 → 기록 저장 
   await patientLoginFails(page, N.loginId, N.password);
   N.password = newPassword;
   await patientLogin(page, N);
-  await expect(page.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^4점/ })).toHaveAttribute("aria-pressed", "true");
+  await expectTodayCondition(page, 4);
   const after = (await (await userSession(N.email, N.password)).from("health_records").select("id, condition").eq("patient_id", N.pid)).data;
   expect(after).toEqual(before); // 같은 기록 (ID 동일)
   await page.context().close();
@@ -181,7 +180,7 @@ test("3. 이전 방식 환자 전환: 아이디 지정 → 새 아이디 + 기�
 
   const page = await newPage(browser);
   await patientLogin(page, L); // 새 아이디 + 기존 비밀번호
-  await expect(page.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^4점/ })).toHaveAttribute("aria-pressed", "true");
+  await expectTodayCondition(page, 4);
   await menu(page, "내 약").click();
   await expect(page.getByRole("region", { name: LEGACY_MED })).toBeVisible();
   await menu(page, "진료 준비").click();
@@ -238,7 +237,7 @@ test("4. 비활성화: 이미 로그인한 기기·세션도 즉시 차단, 새 
   // 복구 후: 같은 아이디·비밀번호로 다시 로그인, 기록 그대로
   const fresh = await newPage(browser);
   await patientLogin(fresh, N);
-  await expect(fresh.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: /^4점/ })).toHaveAttribute("aria-pressed", "true");
+  await expectTodayCondition(fresh, 4);
   expect((await live.from("health_records").select("id").eq("patient_id", N.pid)).data).toHaveLength(1);
   await fresh.context().close();
 });

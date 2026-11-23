@@ -35,3 +35,15 @@ export const demoDrugSearch: DrugSearchFn = async (query) => {
       : DEMO_DRUG_CATALOG.filter((i) => norm(i.name).includes(norm(query.q)));
   return { ok: true, items, total: items.length };
 };
+
+/** 데모용 가상 주의사항 (식약처 제품 정보 형식만 흉내) */
+const DEMO_CAUTIONS: Record<string, string> = {
+  "900000011": "(가상 요약) 1. 이 약에 과민증이 있는 사람은 복용하지 말 것 / 2. 정해진 용량을 넘기지 말 것",
+  "900000021": "(가상 요약) 졸음이 올 수 있으므로 운전·기계 조작에 주의",
+  "900000023": "(가상 요약) 졸음이 올 수 있으므로 운전·기계 조작에 주의",
+  "900000031": "(가상 요약) 다른 감기약과 함께 먹을 때는 성분이 겹치지 않는지 확인",
+};
+export const demoDrugCaution: import("@/lib/drug-search-client").DrugCautionFn = async (itemSeq) => {
+  await new Promise((r) => setTimeout(r, 150));
+  return { ok: true, caution: DEMO_CAUTIONS[itemSeq] ?? "" };
+};

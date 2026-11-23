@@ -178,3 +178,77 @@ export async function searchDrugs(
     clearTimeout(timer);
   }
 }
+
+/* ───────────── 제품 상세(주의사항) — 의약품 제품 허가 상세정보 getDrugPrdtPrmsnDtlInq08 ───────────── */
+
+export const MFDS_PERMIT_DETAIL_URL = "https://apis.data.go.kr/1471000/DrugPrdtPrmsnInfoService08/getDrugPrdtPrmsnDtlInq08";
+
+export type DrugCautionResult =
+  | { ok: true; itemSeq: string; name: string; caution: string }
+  | { ok: false; reason: "not_configured" | "bad_query" | "upstream" | "not_found" };
+
+/** 주의사항 문서(XML 문자열) → 짧은 요약: 조항 제목 위주, 태그 제거, 최대 약 400자 */
+export function summarizeCautionDoc(doc: unknown, max = 400): string {
+  const xml = typeof doc === "string" ? doc : "";
+  if (!xml.trim()) return "";
+  const parts: string[] = [];
+  const re = /<ARTICLE[^>]*title="([^"]*)"[^>]*>([\s\S]*?)<\/ARTICLE>|<PARAGRAPH[^>]*>([\s\S]*?)<\/PARAGRAPH>/gi;
+  for (const m of xml.matchAll(re)) {
+    const title = (m[1] ?? "").trim();
+    const body = (m[2] ?? m[3] ?? "")
+      .replace(/<!\[CDATA\[|\]\]>/g, "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;|&#160;/g, " ")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&")
+      .replace(/\s+/g, " ")
+      .trim();
+    const line = title ? (body ? `${title}: ${body}` : title) : body;
+    if (line) parts.push(line);
+  }
+  const text = (parts.length ? parts.join(" / ") : xml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")).trim();
+  return text.length > max ? `${text.slice(0, max - 1).trim()}…` : text;
+}
+
+export async function getDrugCaution(
+  itemSeq: unknown,
+  deps: { serviceKey?: string; fetch?: typeof fetch; timeoutMs?: number } = {},
+): Promise<DrugCautionResult> {
+  const seq = typeof itemSeq === "string" && /^[0-9]{6,12}$/.test(itemSeq) ? itemSeq : null;
+  if (!seq) return { ok: false, reason: "bad_query" };
+  const key = normalizeServiceKey(deps.serviceKey ?? process.env.MFDS_SERVICE_KEY);
+  if (!key) return { ok: false, reason: "not_configured" };
+  const params = new URLSearchParams({ serviceKey: key, type: "json", pageNo: "1", numOfRows: "1", item_seq: seq }); // 품목기준코드만
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), deps.timeoutMs ?? 8000);
+  try {
+    const res = await (deps.fetch ?? fetch)(`${MFDS_PERMIT_DETAIL_URL}?${params.toString()}`, { signal: ctrl.signal, cache: "no-store", headers: { Accept: "application/json" } });
+    const text = await res.text();
+    let data: { header?: { resultCode?: string }; body?: { items?: unknown }; OpenAPI_ServiceResponse?: unknown };
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.error(`[mfds] 제품 상세 조회 실패: HTTP ${res.status} code=${text.match(/<returnReasonCode>([^<]*)/)?.[1] ?? "non-json"}`);
+      return { ok: false, reason: "upstream" };
+    }
+    if (data.OpenAPI_ServiceResponse || !res.ok) {
+      console.error(`[mfds] 제품 상세 조회 실패: HTTP ${res.status} gateway`);
+      return { ok: false, reason: "upstream" };
+    }
+    const code = String(data.header?.resultCode ?? "");
+    if (code === "03") return { ok: false, reason: "not_found" };
+    if (code !== "00") {
+      console.error(`[mfds] 제품 상세 조회 실패: resultCode=${code || "-"}`);
+      return { ok: false, reason: "upstream" };
+    }
+    const item = extractItems(data.body?.items)[0];
+    if (!item) return { ok: false, reason: "not_found" };
+    return { ok: true, itemSeq: seq, name: String(item.ITEM_NAME ?? ""), caution: summarizeCautionDoc(item.NB_DOC_DATA) };
+  } catch (e) {
+    console.error(`[mfds] 제품 상세 조회 실패: ${e instanceof Error && e.name === "AbortError" ? "timeout" : "network"}`);
+    return { ok: false, reason: "upstream" };
+  } finally {
+    clearTimeout(timer);
+  }
+}

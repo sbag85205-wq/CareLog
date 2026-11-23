@@ -4,13 +4,13 @@ import { Camera, CheckCircle2, FileUp, Plus, ScrollText } from "lucide-react";
 import { useRef, useState } from "react";
 import { Alert, cn, Notice, PButton, PCard, StatusPill } from "@/components/patient-ui/kit";
 import { EXAMPLE_PRESCRIPTION, examplePrescriptionText } from "@/lib/demo/example-prescription";
-import { useDrugSearch } from "@/lib/drug-search-client";
+import { useDrugCaution, useDrugSearch } from "@/lib/drug-search-client";
 import { lookupDrug } from "@/lib/prescription/lookup";
 import type { Candidate, MatchStatus } from "@/lib/prescription/match";
-import { normalizeStrength, parsePrescriptionText, searchName, toFormFields } from "@/lib/prescription/parse";
+import { normalizeStrength, parsePrescriptionMeta, parsePrescriptionText, searchName, toRxFields } from "@/lib/prescription/parse";
 import type { ReadMethod, ReadProgress } from "@/lib/prescription/read-file";
 import type { MedicationInput } from "@/lib/repository/supabase";
-import type { Medication } from "@/types";
+import { DEPARTMENTS, type RxItemInput } from "@/lib/rx/model";
 
 type RowStatus = MatchStatus | "searching" | "manual";
 
@@ -18,9 +18,43 @@ interface Fields {
   name: string;
   strength: string;
   dosage: string;
-  schedule: string;
+  frequency: string;
+  timing: string;
   duration: string;
+  /** 처방전·복약 안내에서 가져온 주의사항 (수정 가능) */
+  cautionRx: string;
 }
+
+export interface ImportMeta {
+  prescribedOn: string;
+  department: string;
+  clinic: string;
+  guidance: string;
+}
+
+/** 확인한 처방 한 건 — requestId 는 화면에서 한 번 만들어 재시도에도 같은 값을 씀 (중복 등록 방지) */
+export interface ImportPayload {
+  requestId: string;
+  meta: ImportMeta;
+  items: RxItemInput[];
+}
+
+/** 처방 이력 구조가 없는 DB에서는 예전처럼 내 약 목록에 등록 (기존 동작 유지) */
+export function payloadToMedications(p: ImportPayload): MedicationInput[] {
+  return p.items.map((i) => ({
+    name: i.name,
+    dosage: i.dosage,
+    schedule: [i.frequency, i.timing, i.duration].filter(Boolean).join(" · ").slice(0, 100),
+    caution: [i.cautionRx, "처방전에서 불러옴"].filter(Boolean).join(" · ").slice(0, 500),
+    externalItemSeq: i.externalItemSeq ?? null,
+    visibleToGuardian: false,
+  }));
+}
+
+const newRequestId = () =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (c) => (Number(c) ^ ((Math.random() * 16) >> (Number(c) / 4))).toString(16));
 
 interface Row {
   key: string;
@@ -30,6 +64,9 @@ interface Row {
   /** 선택한 제품 품목기준코드 / null: 후보 쓰지 않고 직접 입력 / undefined: 아직 고르지 않음 */
   pick: string | null | undefined;
   fields: Fields;
+  /** 식약처 제품 정보의 주의사항 (고른 제품 기준, 요약) */
+  cautionMfds: string;
+  cautionState?: "loading" | "failed";
   include: boolean;
   duplicate: boolean;
   message?: string;
@@ -68,14 +105,30 @@ export function PrescriptionImport({
   save,
   demo,
   onDone,
+  requireDate = true,
 }: {
-  existing: Medication[];
-  save: (inputs: MedicationInput[]) => Promise<void>;
+  /** 이미 등록한 약 (지금 복용 중·내 약) — 같은 약은 기본으로 빼 둠 */
+  existing: { name: string; externalItemSeq?: string }[];
+  save: (payload: ImportPayload) => Promise<void>;
   /** 공개 데모: 예제 처방전만 (실제 파일 인식·식약처 API는 로그인 버전) */
   demo?: boolean;
   onDone: (count: number) => void;
+  /** 처방 이력으로 저장할 때만 처방일 필수 (처방 이력 구조가 없는 DB에서는 약만 등록) */
+  requireDate?: boolean;
 }) {
   const search = useDrugSearch();
+  const fetchCaution = useDrugCaution();
+  const [meta, setMeta] = useState<ImportMeta>({
+    prescribedOn: "",
+    department: "",
+    clinic: "",
+    guidance: "",
+  });
+  const [metaRead, setMetaRead] = useState<{
+    date: boolean;
+    department: boolean;
+  }>({ date: false, department: false });
+  const requestIdRef = useRef<string | null>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [stage, setStage] = useState<"choose" | "reading" | "review" | "saving" | "done">("choose");
@@ -95,14 +148,54 @@ export function PrescriptionImport({
   const update = (key: string, patch: Partial<Row> | ((r: Row) => Partial<Row>)) =>
     setRows((cur) => cur.map((r) => (r.key === key ? { ...r, ...(typeof patch === "function" ? patch(r) : patch) } : r)));
 
+  /** 고른 제품의 식약처 주의사항 가져오기 (품목기준코드만 전송) */
+  async function loadCaution(key: string, seq: string | null | undefined) {
+    if (!seq) {
+      update(key, { cautionMfds: "", cautionState: undefined });
+      return;
+    }
+    update(key, { cautionState: "loading" });
+    const r = await fetchCaution(seq);
+    update(key, (row) =>
+      row.pick === seq
+        ? {
+            cautionMfds: r.ok ? r.caution : "",
+            cautionState: r.ok ? undefined : "failed",
+          }
+        : {},
+    );
+  }
+
   async function startFromText(t: string, how: ReadMethod | "example") {
     setText(t);
     setMethod(how);
+    requestIdRef.current = newRequestId(); // 이번 처방 등록 한 건의 ID
+    const m = parsePrescriptionMeta(t);
+    setMeta({
+      prescribedOn: m.prescribedOn ?? "",
+      department: m.department ?? "",
+      clinic: m.clinic ?? "",
+      guidance: m.guidance ?? "",
+    });
+    setMetaRead({
+      date: Boolean(m.prescribedOn),
+      department: Boolean(m.department),
+    });
     const parsed = parsePrescriptionText(t);
     const initial: Row[] = parsed.map((p) => {
-      const fields = toFormFields(p);
+      const fields = { ...toRxFields(p), cautionRx: "" };
       const duplicate = isDuplicate(fields.name);
-      return { key: p.key, raw: p.raw, status: "searching", candidates: [], pick: undefined, fields, include: !duplicate, duplicate };
+      return {
+        key: p.key,
+        raw: p.raw,
+        status: "searching",
+        candidates: [],
+        pick: undefined,
+        fields,
+        cautionMfds: "",
+        include: !duplicate,
+        duplicate,
+      };
     });
     setRows(initial);
     setStage("review");
@@ -110,7 +203,10 @@ export function PrescriptionImport({
     for (const p of parsed) {
       const m = await lookupDrug(p, search);
       update(p.key, (r) => {
-        const dup = existingMatch(r.fields.name, m.candidates.map((c) => c.item.itemSeq));
+        const dup = existingMatch(
+          r.fields.name,
+          m.candidates.map((c) => c.item.itemSeq),
+        );
         // 이미 등록한 제품이 후보에 있으면 그 제품으로 맞춰 둠 (기본으로 등록하지 않음)
         const already = dup?.externalItemSeq ? m.candidates.find((c) => c.item.itemSeq === dup.externalItemSeq) : undefined;
         const chosen = already ?? (m.status === "confirmed" ? m.candidates.find((c) => c.item.itemSeq === m.selected) : undefined);
@@ -126,6 +222,8 @@ export function PrescriptionImport({
           message: m.message,
         };
       });
+      const chosenSeq = m.status === "confirmed" ? m.selected : undefined;
+      if (chosenSeq) void loadCaution(p.key, chosenSeq);
     }
   }
 
@@ -158,28 +256,40 @@ export function PrescriptionImport({
   const unresolved = selected.filter((r) => r.status === "review" && r.pick === undefined);
   const searching = rows.some((r) => r.status === "searching");
   const missingName = selected.filter((r) => !r.fields.name.trim());
+  const missingDate = requireDate && !/^\d{4}-\d{2}-\d{2}$/.test(meta.prescribedOn);
 
   async function register() {
-    if (savingRef.current || selected.length === 0 || unresolved.length || missingName.length || searching) return;
+    if (savingRef.current || selected.length === 0 || unresolved.length || missingName.length || searching || missingDate) return;
     savingRef.current = true; // 연타·재시도 중복 방지 (한 번의 요청으로 전부 저장되거나 전부 실패)
     setStage("saving");
     setSaveError(null);
     try {
-      await save(
-        selected.map((r) => {
+      await save({
+        requestId: requestIdRef.current ?? (requestIdRef.current = newRequestId()),
+        meta: {
+          ...meta,
+          department: meta.department.trim(),
+          clinic: meta.clinic.trim(),
+          guidance: meta.guidance.trim(),
+        },
+        items: selected.map((r) => {
           const f = r.fields;
           const strength = f.strength.trim();
           const hasStrength = !strength || normalizeStrength(f.name) === normalizeStrength(strength) || f.name.includes(strength);
           return {
             name: (hasStrength ? f.name : `${f.name} ${strength}`).trim().slice(0, 100),
+            strength: strength.slice(0, 50),
             dosage: f.dosage.trim().slice(0, 50),
-            schedule: [f.schedule.trim(), f.duration.trim()].filter(Boolean).join(" · ").slice(0, 100),
-            caution: "처방전에서 불러옴",
-            externalItemSeq: r.pick ?? null,
-            visibleToGuardian: false,
+            frequency: f.frequency.trim().slice(0, 50),
+            timing: f.timing.trim().slice(0, 100),
+            duration: f.duration.trim().slice(0, 50),
+            cautionRx: f.cautionRx.trim().slice(0, 1000),
+            cautionMfds: r.pick ? r.cautionMfds.slice(0, 1000) : "",
+            externalItemSeq: r.pick ?? undefined,
+            active: true,
           };
         }),
-      );
+      });
       setStage("done");
       onDone(selected.length);
     } catch (e) {
@@ -200,10 +310,17 @@ export function PrescriptionImport({
           {demo ? (
             <>
               <ExamplePrescription />
-              <PButton className="w-full" icon={ScrollText} disabled={stage === "reading"} onClick={() => void startFromText(examplePrescriptionText(), "example")}>
+              <PButton
+                className="w-full"
+                icon={ScrollText}
+                disabled={stage === "reading"}
+                onClick={() => void startFromText(examplePrescriptionText(), "example")}
+              >
                 예제 처방전 읽기
               </PButton>
-              <p className="text-xs text-ink-soft">데모는 가상 처방전과 가상 검색 결과를 사용해요. 실제 사진·PDF 인식과 식약처 검색은 로그인한 환자 화면에서 사용할 수 있어요.</p>
+              <p className="text-xs text-ink-soft">
+                데모는 가상 처방전과 가상 검색 결과를 사용해요. 실제 사진·PDF 인식과 식약처 검색은 로그인한 환자 화면에서 사용할 수 있어요.
+              </p>
             </>
           ) : (
             <>
@@ -235,8 +352,8 @@ export function PrescriptionImport({
                 onChange={(e) => void readFile(e.target.files?.[0])}
               />
               <p className="text-xs leading-relaxed text-ink-soft">
-                처방전 사진·PDF는 이 기기 안에서만 읽어요 (서버로 보내지 않음). 제품 확인을 위해 약 이름이나 보험코드만 식약처 검색에 사용해요. 처음 사진을 읽을 때 글자
-                인식 도구를 내려받느라 조금 걸릴 수 있어요.
+                처방전 사진·PDF는 이 기기 안에서만 읽어요 (서버로 보내지 않음). 제품 확인을 위해 약 이름이나 보험코드만 식약처 검색에 사용해요. 처음 사진을 읽을
+                때 글자 인식 도구를 내려받느라 조금 걸릴 수 있어요.
               </p>
             </>
           )}
@@ -251,9 +368,9 @@ export function PrescriptionImport({
     return (
       <PCard tone="tint">
         <p className="flex items-center gap-2 text-lg font-bold text-sage-900">
-          <CheckCircle2 className="h-6 w-6" aria-hidden /> 약 {selected.length}개를 등록했어요
+          <CheckCircle2 className="h-6 w-6" aria-hidden /> 처방 1건 · 약 {selected.length}개를 등록했어요
         </p>
-        <p className="mt-1 text-sm text-sage-800">내 약 목록에서 확인하고, 필요하면 하나씩 수정할 수 있어요.</p>
+        <p className="mt-1 text-sm text-sage-800">지금 복용 중과 처방 이력에서 확인할 수 있어요.</p>
       </PCard>
     );
   }
@@ -264,13 +381,65 @@ export function PrescriptionImport({
         {method ? METHOD_LABEL[method] : ""} · 약 {rows.length}개
         {rows.some((r) => r.status === "review") && ` · 확인 필요 ${rows.filter((r) => r.status === "review").length}개`}
       </Notice>
-      {rows.length === 0 && (
-        <Alert>약 목록을 찾지 못했어요. 더 밝은 곳에서 처방전 전체가 보이게 다시 찍거나, 아래에서 직접 추가해 주세요.</Alert>
-      )}
+      <PCard className="!p-4 sm:!p-5" aria-label="처방 정보">
+        <p className="font-bold text-ink">처방 정보</p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          <label className="block">
+            <span className="mb-1 block text-xs font-bold text-ink-soft">처방일</span>
+            <input
+              type="date"
+              value={meta.prescribedOn}
+              onChange={(e) => setMeta({ ...meta, prescribedOn: e.target.value })}
+              className="h-11 w-full rounded-xl border border-line bg-white px-3 text-[0.95rem] text-ink outline-none focus:border-sage-500 focus:ring-4 focus:ring-sage-100"
+            />
+            {!metaRead.date && <span className="mt-1 block text-xs text-blush-700">처방전에서 날짜를 읽지 못했어요. 확인해서 입력해 주세요.</span>}
+          </label>
+          <label className="block">
+            <span className="mb-1 block text-xs font-bold text-ink-soft">진료과</span>
+            <select
+              value={meta.department}
+              onChange={(e) => setMeta({ ...meta, department: e.target.value })}
+              className="h-11 w-full rounded-xl border border-line bg-white px-3 text-[0.95rem] text-ink outline-none focus:border-sage-500 focus:ring-4 focus:ring-sage-100"
+            >
+              <option value="">선택 안 함</option>
+              {DEPARTMENTS.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+            {!metaRead.department && <span className="mt-1 block text-xs text-ink-soft">진료과가 분명하지 않으면 고르거나 비워 두세요.</span>}
+          </label>
+          <MiniField
+            label="의료기관 (선택)"
+            value={meta.clinic}
+            onChange={(e) => setMeta({ ...meta, clinic: e.target.value })}
+            placeholder="예: 가상이비인후과의원"
+            wide
+          />
+          <label className="block sm:col-span-2">
+            <span className="mb-1 flex items-center gap-2 text-xs font-bold text-ink-soft">
+              주의사항 · 복약 안내{" "}
+              <StatusPill tone="ivory" className="!px-2 !py-0 !text-[0.7rem]">
+                출처: 처방전·복약 안내
+              </StatusPill>
+            </span>
+            <textarea
+              value={meta.guidance}
+              onChange={(e) => setMeta({ ...meta, guidance: e.target.value })}
+              rows={2}
+              maxLength={1000}
+              placeholder="처방전·복약 안내에 적힌 주의사항 (없으면 비워 두세요)"
+              className="w-full rounded-xl border border-line bg-white px-3 py-2 text-[0.95rem] text-ink outline-none focus:border-sage-500 focus:ring-4 focus:ring-sage-100"
+            />
+          </label>
+        </div>
+      </PCard>
+      {rows.length === 0 && <Alert>약 목록을 찾지 못했어요. 더 밝은 곳에서 처방전 전체가 보이게 다시 찍거나, 아래에서 직접 추가해 주세요.</Alert>}
       <ul className="space-y-3" aria-label="처방전에서 읽은 약">
         {rows.map((r, i) => (
           <li key={r.key}>
-            <RowCard row={r} index={i} onChange={(patch) => update(r.key, patch)} />
+            <RowCard row={r} index={i} onChange={(patch) => update(r.key, patch)} onPick={(seq) => void loadCaution(r.key, seq)} />
           </li>
         ))}
       </ul>
@@ -281,7 +450,25 @@ export function PrescriptionImport({
         onClick={() =>
           setRows((cur) => [
             ...cur,
-            { key: `manual-${Date.now()}`, raw: "", status: "manual", candidates: [], pick: null, include: true, duplicate: false, fields: { name: "", strength: "", dosage: "", schedule: "", duration: "" } },
+            {
+              key: `manual-${Date.now()}`,
+              raw: "",
+              status: "manual",
+              candidates: [],
+              pick: null,
+              include: true,
+              duplicate: false,
+              cautionMfds: "",
+              fields: {
+                name: "",
+                strength: "",
+                dosage: "",
+                frequency: "",
+                timing: "",
+                duration: "",
+                cautionRx: "",
+              },
+            },
           ])
         }
       >
@@ -297,13 +484,16 @@ export function PrescriptionImport({
       <div className="sticky bottom-0 -mx-4 space-y-2 border-t border-line bg-ivory px-4 pt-3 pb-1 sm:-mx-6 sm:px-6">
         {searching && <p className="text-sm text-ink-soft">제품 후보를 찾는 중이에요…</p>}
         {unresolved.length > 0 && (
-          <p className="text-sm font-semibold text-blush-700">확인 필요 {unresolved.length}개 — 제품 후보를 고르거나 ‘후보 사용 안 함 · 직접 입력’을 선택해 주세요.</p>
+          <p className="text-sm font-semibold text-blush-700">
+            확인 필요 {unresolved.length}개 — 제품 후보를 고르거나 ‘후보 사용 안 함 · 직접 입력’을 선택해 주세요.
+          </p>
         )}
         {missingName.length > 0 && <p className="text-sm font-semibold text-blush-700">약 이름이 빈 줄이 있어요.</p>}
+        {missingDate && <p className="text-sm font-semibold text-blush-700">처방일을 입력해 주세요.</p>}
         <Alert>{saveError}</Alert>
         <PButton
           className="w-full"
-          disabled={stage === "saving" || selected.length === 0 || unresolved.length > 0 || missingName.length > 0 || searching}
+          disabled={stage === "saving" || selected.length === 0 || unresolved.length > 0 || missingName.length > 0 || searching || missingDate}
           onClick={() => void register()}
         >
           {stage === "saving" ? "등록 중…" : `선택한 약 ${selected.length}개 한 번에 등록`}
@@ -313,7 +503,17 @@ export function PrescriptionImport({
   );
 }
 
-function RowCard({ row: r, index, onChange }: { row: Row; index: number; onChange: (p: Partial<Row> | ((r: Row) => Partial<Row>)) => void }) {
+function RowCard({
+  row: r,
+  index,
+  onChange,
+  onPick,
+}: {
+  row: Row;
+  index: number;
+  onChange: (p: Partial<Row> | ((r: Row) => Partial<Row>)) => void;
+  onPick: (seq: string | null) => void;
+}) {
   const pill = r.duplicate ? { label: "이미 등록된 약", tone: "ivory" as const } : STATUS_PILL[r.status];
   const setField = (k: keyof Fields) => (e: React.ChangeEvent<HTMLInputElement>) => {
     const v = e.target.value;
@@ -356,7 +556,13 @@ function RowCard({ row: r, index, onChange }: { row: Row; index: number; onChang
                 name={`pick-${r.key}`}
                 className="mt-1 accent-sage-700"
                 checked={r.pick === c.item.itemSeq}
-                onChange={() => onChange((cur) => ({ pick: c.item.itemSeq, fields: { ...cur.fields, name: c.item.name } }))}
+                onChange={() => {
+                  onChange((cur) => ({
+                    pick: c.item.itemSeq,
+                    fields: { ...cur.fields, name: c.item.name },
+                  }));
+                  onPick(c.item.itemSeq);
+                }}
                 aria-label={`${c.item.name} · ${c.item.company}`}
               />
               <span className="min-w-0 text-sm">
@@ -375,8 +581,22 @@ function RowCard({ row: r, index, onChange }: { row: Row; index: number; onChang
               </span>
             </label>
           ))}
-          <label className={cn("flex cursor-pointer items-center gap-2 rounded-2xl border p-3 text-sm", r.pick === null ? "border-sage-500 bg-sage-50" : "border-line bg-white")}>
-            <input type="radio" name={`pick-${r.key}`} className="accent-sage-700" checked={r.pick === null} onChange={() => onChange({ pick: null })} />
+          <label
+            className={cn(
+              "flex cursor-pointer items-center gap-2 rounded-2xl border p-3 text-sm",
+              r.pick === null ? "border-sage-500 bg-sage-50" : "border-line bg-white",
+            )}
+          >
+            <input
+              type="radio"
+              name={`pick-${r.key}`}
+              className="accent-sage-700"
+              checked={r.pick === null}
+              onChange={() => {
+                onChange({ pick: null });
+                onPick(null);
+              }}
+            />
             후보 사용 안 함 · 직접 입력
           </label>
         </fieldset>
@@ -386,9 +606,31 @@ function RowCard({ row: r, index, onChange }: { row: Row; index: number; onChang
         <MiniField label="약 이름" value={r.fields.name} onChange={setField("name")} wide />
         <MiniField label="함량" value={r.fields.strength} onChange={setField("strength")} placeholder="예: 500mg" />
         <MiniField label="1회 복용량" value={r.fields.dosage} onChange={setField("dosage")} placeholder="예: 1회 1정" />
-        <MiniField label="횟수·복용 시간" value={r.fields.schedule} onChange={setField("schedule")} placeholder="예: 하루 3회 · 식후 30분" />
+        <MiniField label="횟수" value={r.fields.frequency} onChange={setField("frequency")} placeholder="예: 하루 3회" />
+        <MiniField label="시점" value={r.fields.timing} onChange={setField("timing")} placeholder="예: 식후 30분" />
         <MiniField label="기간" value={r.fields.duration} onChange={setField("duration")} placeholder="예: 5일분" />
+        <MiniField
+          label="주의사항 (처방전·복약 안내)"
+          value={r.fields.cautionRx}
+          onChange={setField("cautionRx")}
+          placeholder="안내받은 주의사항 (없으면 비워 두세요)"
+          wide
+        />
       </div>
+      {r.pick && (r.cautionMfds || r.cautionState) && (
+        <div className="mt-2 rounded-xl bg-ivory px-3 py-2 text-xs text-ink" aria-label={`${title} 식약처 주의사항`}>
+          <StatusPill tone="outline" className="!px-2 !py-0 !text-[0.7rem]">
+            출처: 식약처 제품 정보
+          </StatusPill>
+          <p className="mt-1">
+            {r.cautionState === "loading"
+              ? "식약처 주의사항을 가져오는 중…"
+              : r.cautionState === "failed"
+                ? "식약처 주의사항을 가져오지 못했어요."
+                : r.cautionMfds}
+          </p>
+        </div>
+      )}
     </PCard>
   );
 }
@@ -428,7 +670,14 @@ function ProgressBar({ p }: { p: ReadProgress }) {
       <p className="text-sm font-semibold text-sage-800">
         {label}… {pct}%
       </p>
-      <div className="mt-2 h-2 overflow-hidden rounded-full bg-ivory-deep" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
+      <div
+        className="mt-2 h-2 overflow-hidden rounded-full bg-ivory-deep"
+        role="progressbar"
+        aria-valuenow={pct}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label={label}
+      >
         <div className="h-full rounded-full bg-sage-700 transition-all" style={{ width: `${pct}%` }} />
       </div>
     </div>

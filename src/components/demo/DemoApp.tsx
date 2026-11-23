@@ -9,18 +9,28 @@ import { PATIENT_TABS, PatientTabs, type PatientTab } from "@/components/patient
 import { AppShell } from "@/components/patient-ui/AppShell";
 import { cn, PButton, PCard, SoftSheet } from "@/components/patient-ui/kit";
 import { RepositoryProvider } from "@/hooks/repository-context";
-import { demoDrugSearch } from "@/lib/demo/drug-catalog";
-import { DrugSearchProvider } from "@/lib/drug-search-client";
+import { DEMO_GUARDIAN_ID, DEMO_PATIENT_ID } from "@/data/mock-data";
+import { todayISO } from "@/lib/date";
+import { demoDrugCaution, demoDrugSearch } from "@/lib/demo/drug-catalog";
+import { DrugCautionProvider, DrugSearchProvider } from "@/lib/drug-search-client";
+import { FEATURES } from "@/lib/features";
 import { repository as localRepository } from "@/lib/repository";
 import { createDemoRepository, type DemoRole } from "@/lib/repository/demo";
+import { createLocalRxStore } from "@/lib/rx/local-store";
+import { RxStoreProvider } from "@/lib/rx/store";
 
+// 새 버전 데모: 환자 · 보호자 (의료진 병동 흐름은 FEATURES.WARD 를 켜면 다시 보임)
 const ROLES: { id: DemoRole; label: string; icon: typeof User }[] = [
   { id: "patient", label: "환자", icon: User },
-  { id: "staff", label: "의료진", icon: Stethoscope },
+  ...(FEATURES.WARD ? [{ id: "staff" as const, label: "의료진", icon: Stethoscope }] : []),
   { id: "guardian", label: "보호자", icon: Users },
 ];
 
-const ROLE_LABEL: Record<DemoRole, string> = { patient: "가상 환자", staff: "가상 간호사", guardian: "가상 보호자" };
+const ROLE_LABEL: Record<DemoRole, string> = {
+  patient: "가상 환자",
+  staff: "가상 간호사",
+  guardian: "가상 보호자",
+};
 
 /**
  * 공개 데모 (/demo, 포스터 QR) — 로그인 없이 역할을 바꿔 가며 체험
@@ -34,6 +44,24 @@ export function DemoApp() {
   const [resetOpen, setResetOpen] = useState(false);
   const repo = useMemo(() => createDemoRepository(localRepository, role), [role]);
   const snapshot = useSyncExternalStore(repo.subscribe, repo.getSnapshot, () => null);
+  // 처방 이력 (가상 · 이 브라우저 localStorage). 보호자는 '보호자와 공유'를 켠 처방만, 약 정보 공유 범위가 있을 때만
+  const rxStore = useMemo(
+    () =>
+      createLocalRxStore({
+        patientId: DEMO_PATIENT_ID,
+        today: todayISO,
+        viewer: () => {
+          const grant = localRepository
+            .getSnapshot()
+            ?.accessGrants.find((g) => g.patientId === DEMO_PATIENT_ID && g.granteeUserId === DEMO_GUARDIAN_ID && !g.revokedAt);
+          return {
+            role: role === "guardian" ? "guardian" : "patient",
+            guardianHasMedicationScope: Boolean(grant?.scopes.includes("medications")),
+          };
+        },
+      }),
+    [role],
+  );
 
   const changeRole = (r: DemoRole) => {
     setRole(r);
@@ -65,48 +93,53 @@ export function DemoApp() {
 
   return (
     <DrugSearchProvider value={demoDrugSearch}>
-      <RepositoryProvider value={repo}>
-        {role === "patient" ? (
-          <AppShell tabs={PATIENT_TABS} active={patientTab} onTab={setPatientTab} {...shell}>
-            {body}
-          </AppShell>
-        ) : role === "staff" ? (
-          <AppShell
-            tabs={STAFF_TABS}
-            active={staffTab}
-            onTab={(t) => {
-              setStaffTab(t);
-              setSelected(null);
-            }}
-            {...shell}
-          >
-            {body}
-          </AppShell>
-        ) : (
-          <AppShell tabs={GUARDIAN_TABS} active="home" onTab={() => {}} {...shell}>
-            {body}
-          </AppShell>
-        )}
-        <SoftSheet open={resetOpen} title="데모 데이터 초기화" onClose={() => setResetOpen(false)}>
-          <PCard className="space-y-4">
-            <p className="text-ink">이 브라우저에 저장된 가상 기록·약·요청을 모두 지우고 처음 상태로 되돌려요.</p>
-            <PButton
-              className="w-full"
-              icon={RotateCcw}
-              onClick={async () => {
-                await repo.resetDemoData();
-                setPatientTab("home");
-                setStaffTab("patients");
-                setSelected(null);
-                setResetOpen(false);
-                window.scrollTo({ top: 0 });
-              }}
-            >
-              처음 상태로 되돌리기
-            </PButton>
-          </PCard>
-        </SoftSheet>
-      </RepositoryProvider>
+      <DrugCautionProvider value={demoDrugCaution}>
+        <RxStoreProvider value={rxStore}>
+          <RepositoryProvider value={repo}>
+            {role === "patient" ? (
+              <AppShell tabs={PATIENT_TABS} active={patientTab} onTab={setPatientTab} {...shell}>
+                {body}
+              </AppShell>
+            ) : role === "staff" ? (
+              <AppShell
+                tabs={STAFF_TABS}
+                active={staffTab}
+                onTab={(t) => {
+                  setStaffTab(t);
+                  setSelected(null);
+                }}
+                {...shell}
+              >
+                {body}
+              </AppShell>
+            ) : (
+              <AppShell tabs={GUARDIAN_TABS} active="home" onTab={() => {}} {...shell}>
+                {body}
+              </AppShell>
+            )}
+            <SoftSheet open={resetOpen} title="데모 데이터 초기화" onClose={() => setResetOpen(false)}>
+              <PCard className="space-y-4">
+                <p className="text-ink">이 브라우저에 저장된 가상 처방·복용 경험·기록·약을 모두 지우고 처음 상태로 되돌려요.</p>
+                <PButton
+                  className="w-full"
+                  icon={RotateCcw}
+                  onClick={async () => {
+                    await repo.resetDemoData();
+                    rxStore.reset();
+                    setPatientTab("home");
+                    setStaffTab("patients");
+                    setSelected(null);
+                    setResetOpen(false);
+                    window.scrollTo({ top: 0 });
+                  }}
+                >
+                  처음 상태로 되돌리기
+                </PButton>
+              </PCard>
+            </SoftSheet>
+          </RepositoryProvider>
+        </RxStoreProvider>
+      </DrugCautionProvider>
     </DrugSearchProvider>
   );
 }
@@ -129,7 +162,11 @@ function DemoBar({ role, onRole, onReset }: { role: DemoRole; onRole: (r: DemoRo
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <div role="tablist" aria-label="데모 역할" className="grid flex-1 grid-cols-3 gap-1 rounded-[1.1rem] bg-white/70 p-1 lg:w-96 lg:flex-none">
+          <div
+            role="tablist"
+            aria-label="데모 역할"
+            className="grid flex-1 auto-cols-fr grid-flow-col gap-1 rounded-[1.1rem] bg-white/70 p-1 lg:w-96 lg:flex-none"
+          >
             {ROLES.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}

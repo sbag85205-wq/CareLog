@@ -1,16 +1,21 @@
 "use client";
 
-import { Pencil, Pill, Plus, ScrollText, Trash2 } from "lucide-react";
+import { Pencil, Pill, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { PageTitle } from "@/components/patient-ui/AppShell";
 import { DrugSearch, type DrugItem } from "@/components/patient-db/DrugSearch";
-import { PrescriptionImport } from "@/components/patient-db/PrescriptionImport";
 import { Alert, Notice, PButton, PCard, SoftSheet, StatusPill, Switch, TextArea, TextField } from "@/components/patient-ui/kit";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import type { MedicationInput, SupabaseRepository } from "@/lib/repository/supabase";
 import type { Medication } from "@/types";
 
-const EMPTY: MedicationInput = { name: "", dosage: "", schedule: "", caution: "", visibleToGuardian: false };
+const EMPTY: MedicationInput = {
+  name: "",
+  dosage: "",
+  schedule: "",
+  caution: "",
+  visibleToGuardian: false,
+};
 
 /**
  * 내 약 — 환자가 안내받은 약을 직접 기록 (가상 데이터, 식약처 API 연동 전)
@@ -23,7 +28,7 @@ export function MedicationsView({
   editable,
   title = "내 약",
   sub = "안내받은 약을 한곳에서 차분하게 확인해요.",
-  demo = false,
+  embedded = false,
 }: {
   medications: Medication[];
   patientId: string;
@@ -31,54 +36,63 @@ export function MedicationsView({
   editable: boolean;
   title?: string;
   sub?: string;
-  /** 공개 데모: 예제 처방전 */
-  demo?: boolean;
+  /** 다른 화면(지금 복용 중) 안에 넣을 때: 큰 제목 대신 작은 제목 */
+  embedded?: boolean;
 }) {
-  const [editing, setEditing] = useState<{ id: string | null; input: MedicationInput } | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [imported, setImported] = useState<number | null>(null);
+  const [editing, setEditing] = useState<{
+    id: string | null;
+    input: MedicationInput;
+  } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const action = useAsyncAction();
 
   return (
     <div className="space-y-5">
-      <PageTitle
-        title={title}
-        sub={sub}
-        action={
-          editable && (
-            <div className="flex flex-wrap gap-2">
-              <PButton
-                size="md"
-                variant="secondary"
-                icon={ScrollText}
-                onClick={() => {
-                  setImported(null);
-                  setImporting(true);
-                }}
-              >
-                {demo ? "예제 처방전 불러오기" : "처방전 불러오기"}
-              </PButton>
-              <PButton size="md" icon={Plus} onClick={() => setEditing({ id: null, input: EMPTY })}>
-                약 추가
-              </PButton>
-            </div>
-          )
-        }
-      />
-      <PCard tone="tint">
-        <p className="text-lg font-bold text-sage-900">복용 중인 약 {medications.length}개</p>
-        <p className="mt-1 text-sm text-sage-800">
-          가상 데이터예요. 실제 복용·변경·중단은 의료진과 상담해 주세요.
-          {editable && " 보호자에게는 '보호자에게 공개'를 켠 약만 보여요."}
-        </p>
-      </PCard>
+      {embedded ? (
+        <div className="flex flex-wrap items-end justify-between gap-2 px-1">
+          <div>
+            <h2 className="text-xl font-bold text-ink">{title}</h2>
+            {sub && <p className="mt-1 text-sm text-ink-soft">{sub}</p>}
+          </div>
+          {editable && (
+            <PButton size="sm" variant="secondary" icon={Plus} onClick={() => setEditing({ id: null, input: EMPTY })}>
+              약 직접 추가
+            </PButton>
+          )}
+        </div>
+      ) : (
+        <>
+          <PageTitle
+            title={title}
+            sub={sub}
+            action={
+              editable && (
+                <PButton size="md" icon={Plus} onClick={() => setEditing({ id: null, input: EMPTY })}>
+                  약 추가
+                </PButton>
+              )
+            }
+          />
+          <PCard tone="tint">
+            <p className="text-lg font-bold text-sage-900">복용 중인 약 {medications.length}개</p>
+            <p className="mt-1 text-sm text-sage-800">
+              가상 데이터예요. 실제 복용·변경·중단은 의료진과 상담해 주세요.
+              {editable && " 보호자에게는 '보호자에게 공개'를 켠 약만 보여요."}
+            </p>
+          </PCard>
+        </>
+      )}
       <Alert>{action.error}</Alert>
-      {imported !== null && !importing && <Notice>처방전에서 약 {imported}개를 등록했어요.</Notice>}
 
       {medications.length === 0 ? (
         <PCard tone="ivory">
-          <p className="text-ink-soft">{editable ? "아직 등록한 약이 없어요. '약 추가'로 안내받은 약을 기록해 보세요." : "보여 줄 약이 없어요."}</p>
+          <p className="text-ink-soft">
+            {embedded
+              ? "처방전 없이 따로 적어 둔 약이 없어요."
+              : editable
+                ? "아직 등록한 약이 없어요. '약 추가'로 안내받은 약을 기록해 보세요."
+                : "보여 줄 약이 없어요."}
+          </p>
         </PCard>
       ) : (
         <ul className="grid gap-3 lg:grid-cols-2" aria-label="약 목록">
@@ -131,7 +145,16 @@ export function MedicationsView({
                           variant="secondary"
                           icon={Pencil}
                           onClick={() =>
-                            setEditing({ id: m.id, input: { name: m.name, dosage: m.dosage, schedule: m.schedule, caution: m.caution, externalItemSeq: m.externalItemSeq } })
+                            setEditing({
+                              id: m.id,
+                              input: {
+                                name: m.name,
+                                dosage: m.dosage,
+                                schedule: m.schedule,
+                                caution: m.caution,
+                                externalItemSeq: m.externalItemSeq,
+                              },
+                            })
                           }
                         >
                           수정
@@ -150,26 +173,12 @@ export function MedicationsView({
       )}
 
       {editable && repo && (
-        <SoftSheet open={importing} title={demo ? "예제 처방전 불러오기" : "처방전 불러오기"} onClose={() => setImporting(false)}>
-          {importing && (
-            <PrescriptionImport
-              existing={medications}
-              demo={demo}
-              save={(inputs) => repo.addMedications(patientId, inputs)}
-              onDone={(n) => setImported(n)}
-            />
-          )}
-        </SoftSheet>
-      )}
-      {editable && repo && (
         <MedicationSheet
           state={editing}
           onClose={() => setEditing(null)}
           onSave={async (input) => {
             if (!editing) return false;
-            const r = await action.run(() =>
-              editing.id ? repo.updateMedication(editing.id, input) : repo.addMedication(patientId, input),
-            );
+            const r = await action.run(() => (editing.id ? repo.updateMedication(editing.id, input) : repo.addMedication(patientId, input)));
             return r.ok;
           }}
           pending={action.pending}
@@ -195,7 +204,9 @@ function MedicationSheet({
 }) {
   return (
     <SoftSheet open={state !== null} title={state?.id ? "약 정보 수정" : "약 추가"} onClose={onClose}>
-      {state && <MedicationForm key={state.id ?? "new"} initial={state.input} isNew={!state.id} onSave={onSave} onDone={onClose} pending={pending} error={error} />}
+      {state && (
+        <MedicationForm key={state.id ?? "new"} initial={state.input} isNew={!state.id} onSave={onSave} onDone={onClose} pending={pending} error={error} />
+      )}
     </SoftSheet>
   );
 }
@@ -231,7 +242,11 @@ function MedicationForm({
         <DrugSearch
           onSelect={(it) => {
             setPicked(it);
-            setV({ ...v, name: it.name.slice(0, 100), externalItemSeq: it.itemSeq || null });
+            setV({
+              ...v,
+              name: it.name.slice(0, 100),
+              externalItemSeq: it.itemSeq || null,
+            });
           }}
         />
         {picked && (
@@ -250,14 +265,38 @@ function MedicationForm({
             if (picked && name !== picked.name.slice(0, 100)) setPicked(null);
             // 검색으로 고른 이름을 직접 고치면 품목기준코드를 지우고 직접 입력으로 저장
             const changedFromPick = picked ? name !== picked.name.slice(0, 100) : Boolean(v.externalItemSeq);
-            setV({ ...v, name, ...(changedFromPick ? { externalItemSeq: null } : {}) });
+            setV({
+              ...v,
+              name,
+              ...(changedFromPick ? { externalItemSeq: null } : {}),
+            });
           }}
           placeholder="검색하지 않고 직접 입력해도 돼요"
           helper="안내받은 약 이름을 그대로 적어 주세요."
         />
-        <TextField label="1회 복용량 (안내받은 대로)" value={v.dosage} maxLength={50} onChange={(e) => setV({ ...v, dosage: e.target.value })} placeholder="예: 1회 1정" />
-        <TextField label="복용 시간" value={v.schedule} maxLength={100} onChange={(e) => setV({ ...v, schedule: e.target.value })} placeholder="예: 아침 식후 30분" />
-        <TextArea label="메모" value={v.caution} maxLength={500} counter rows={3} onChange={(e) => setV({ ...v, caution: e.target.value })} placeholder="예: 물과 함께 천천히 (가상 데이터만 입력)" />
+        <TextField
+          label="1회 복용량 (안내받은 대로)"
+          value={v.dosage}
+          maxLength={50}
+          onChange={(e) => setV({ ...v, dosage: e.target.value })}
+          placeholder="예: 1회 1정"
+        />
+        <TextField
+          label="복용 시간"
+          value={v.schedule}
+          maxLength={100}
+          onChange={(e) => setV({ ...v, schedule: e.target.value })}
+          placeholder="예: 아침 식후 30분"
+        />
+        <TextArea
+          label="메모"
+          value={v.caution}
+          maxLength={500}
+          counter
+          rows={3}
+          onChange={(e) => setV({ ...v, caution: e.target.value })}
+          placeholder="예: 물과 함께 천천히 (가상 데이터만 입력)"
+        />
         {isNew && (
           <Switch
             label="보호자에게 공개"

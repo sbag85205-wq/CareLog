@@ -74,9 +74,22 @@ async function mockSearch(page: Page, sent: unknown[]) {
 
 async function openImport(page: Page) {
   await menu(page, "내 약").click();
-  await page.getByRole("button", { name: "처방전 불러오기" }).click();
-  return page.getByRole("dialog", { name: "처방전 불러오기" });
+  await page.getByRole("button", { name: "처방전 등록" }).first().click();
+  return page.getByRole("dialog", { name: "처방전 등록" });
 }
+
+/**
+ * 처방 이력 DB 구조(migration 20261123090000) 적용 여부 — 본인 세션으로 조회
+ * 미적용: 예전처럼 내 약(medications)에 등록 / 적용: 처방 1건 + 처방 약(prescription_items)
+ */
+async function rxTablesReady(v: VPatient): Promise<boolean> {
+  const { error } = await (await userSession(v.email, v.password)).from("prescriptions").select("id").limit(1);
+  return !error;
+}
+const rxItems = async (v: VPatient) =>
+  (await (await userSession(v.email, v.password)).from("prescription_items").select("name, external_item_seq").eq("patient_id", v.pid).order("sort")).data ?? [];
+/** 등록된 약 수 (모드별) */
+const registeredCount = async (v: VPatient) => ((await rxTablesReady(v)) ? (await rxItems(v)).length : (await meds(v)).length);
 
 const meds = async (v: VPatient) =>
   (await (await userSession(v.email, v.password)).from("medications").select("name, dosage, schedule, source, external_item_seq, visible_to_guardian").eq("patient_id", v.pid).order("created_at")).data ?? [];
@@ -121,9 +134,18 @@ test("텍스트 PDF(파일 선택): 글자 추출 → 약 5개 → 확인됨·�
   const button = dlg.getByRole("button", { name: "선택한 약 5개 한 번에 등록" });
   await button.click();
   await button.click({ force: true, timeout: 1000 }).catch(() => {}); // 연타
-  await expect(page.getByText("약 5개를 등록했어요").or(page.getByText("처방전에서 약 5개를 등록했어요."))).toBeVisible();
+  await expect(dlg.getByText("처방 1건 · 약 5개를 등록했어요")).toBeVisible();
 
-  expect(await meds(P1)).toEqual([
+  const rxMode = await rxTablesReady(P1);
+  if (rxMode) {
+    expect((await rxItems(P1)).map((r) => r.name)).toEqual(["케어가상정500밀리그램(가상성분)", "케어가상캡슐10밀리그램", "케어가상코프시럽(가상성분)", "케어가상서방정75밀리그램", "없는가상연고"]);
+    expect(await meds(P1)).toEqual([]);
+  } else {
+    // 처방 이력 DB 구조가 없는 DB: 안내 + 예전처럼 내 약 목록에 등록
+    await expect(page.getByText("처방 이력은 DB 업데이트 후 사용할 수 있어요.", { exact: false }).first()).toBeVisible();
+    await expect(page.getByText("처방전에서 약 5개를 내 약 목록에 등록했어요.")).toBeVisible();
+  }
+  if (!rxMode) expect(await meds(P1)).toEqual([
     { name: "케어가상정500밀리그램(가상성분)", dosage: "1회 1정", schedule: "하루 3회 · 식후 30분 · 5일분", source: "mfds_permit", external_item_seq: "900000011", visible_to_guardian: false },
     { name: "케어가상캡슐10밀리그램", dosage: "1회 1캡슐", schedule: "하루 2회 · 아침 저녁 식후 · 7일분", source: "mfds_permit", external_item_seq: "900000021", visible_to_guardian: false },
     { name: "케어가상코프시럽(가상성분)", dosage: "1회 10mL", schedule: "하루 3회 · 5일분", source: "mfds_permit", external_item_seq: "900000031", visible_to_guardian: false },
@@ -144,11 +166,12 @@ test("텍스트 PDF(파일 선택): 글자 추출 → 약 5개 → 확인됨·�
   await expect(again.getByText("이미 등록된 약").first()).toBeVisible({ timeout: 60_000 });
   await expect(again.getByText("제품 찾는 중")).toHaveCount(0, { timeout: 60_000 });
   await expect(again.getByRole("button", { name: "선택한 약 0개 한 번에 등록" })).toBeDisabled();
-  expect(await meds(P1)).toHaveLength(5);
+  expect(await registeredCount(P1)).toBe(5);
   await page.context().close();
 });
 
 test("보호자 공유: 처방전으로 등록한 약은 기본 비공개, 환자가 공개한 약만 보호자에게", async ({ browser }) => {
+  test.skip(await rxTablesReady(P1), "처방 이력 모드의 보호자 공유는 처방 단위 ('보호자와 공유') — DB 테스트에서 검증");
   const sg = await userSession(G.email, G.password);
   expect((await sg.from("medications").select("name").eq("patient_id", P1.pid)).data).toEqual([]);
   const page = await newPage(browser);
@@ -174,7 +197,7 @@ test("모바일 '사진 찍기'(카메라 입력) → 사진 OCR → 약 목록 
   expect(await rows.count()).toBeGreaterThanOrEqual(3);
   await expect(rows.first().getByLabel("약 이름")).toHaveValue(/케어가상정/);
   const n = await resolveAndRegister(page);
-  expect(await meds(P2)).toHaveLength(n);
+  expect(await registeredCount(P2)).toBe(n);
   await page.context().close();
 });
 
@@ -194,7 +217,7 @@ test("스캔 PDF(이미지뿐) → 이미지로 OCR / 사진 파일 선택(PC) �
   await expect(dlg.getByText(/사진에서 글자를 읽었어요 · 약 \d+개/)).toBeVisible({ timeout: 180_000 });
   await expect(dlg.getByText("이미 등록된 약").first()).toBeVisible({ timeout: 60_000 }); // 앞에서 등록한 약
   await dlg.getByRole("button", { name: "닫기" }).click();
-  expect(await meds(P3)).toHaveLength(n);
+  expect(await registeredCount(P3)).toBe(n);
   await page.context().close();
 });
 
@@ -211,8 +234,14 @@ test("검색 실패(실제 서버 경로, 키 없음) → 직접 입력 → 일�
   await dlg.getByRole("list", { name: "처방전에서 읽은 약" }).getByRole("listitem").last().getByLabel("약 이름").fill("(가상) 직접 추가한 약");
   await dlg.getByRole("button", { name: "선택한 약 6개 한 번에 등록" }).click();
   await expect(dlg.getByText("약 6개를 등록했어요")).toBeVisible();
-  const rows = await meds(P4);
-  expect(rows).toHaveLength(6);
-  expect(rows.every((r) => r.source === "manual")).toBe(true);
+  if (await rxTablesReady(P4)) {
+    const rows = await rxItems(P4);
+    expect(rows).toHaveLength(6);
+    expect(rows.every((r) => r.external_item_seq === null)).toBe(true);
+  } else {
+    const rows = await meds(P4);
+    expect(rows).toHaveLength(6);
+    expect(rows.every((r) => r.source === "manual")).toBe(true);
+  }
   await page.context().close();
 });

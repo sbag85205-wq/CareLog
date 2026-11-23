@@ -155,6 +155,25 @@ export async function fillCondition(page: Page | Locator, score: number) {
   await page.getByRole("group", { name: "소화 상태" }).getByRole("button", { name: "좋음" }).click();
 }
 
+/** 새 홈: '오늘 컨디션 기록' 창을 열어 저장 */
+export async function recordCondition(page: Page, score: number) {
+  await page.getByRole("button", { name: /^오늘 (컨디션 기록|기록 수정)$/ }).click();
+  const dlg = page.getByRole("dialog", { name: "오늘 컨디션 기록" });
+  await fillCondition(dlg, score);
+  await dlg.getByRole("button", { name: /^기록 (저장|수정)$/ }).click();
+  await expect(dlg).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "오늘 기록 수정" })).toBeVisible();
+}
+
+/** 새 홈: 오늘 기록의 점수 확인 (창을 열어 보고 닫음) */
+export async function expectTodayCondition(page: Page, score: number) {
+  await page.getByRole("button", { name: "오늘 기록 수정" }).click();
+  const dlg = page.getByRole("dialog", { name: "오늘 컨디션 기록" });
+  await expect(dlg.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: new RegExp(`^${score}점`) })).toHaveAttribute("aria-pressed", "true");
+  await dlg.getByRole("button", { name: "닫기" }).click();
+  await expect(dlg).toHaveCount(0);
+}
+
 export const menu = (page: Page, name: string) => page.getByRole("navigation", { name: "메뉴" }).getByRole("button", { name, exact: true });
 
 export async function expectNoHorizontalOverflow(page: Page) {

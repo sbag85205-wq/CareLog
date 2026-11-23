@@ -98,7 +98,8 @@ export function createDemoRepository(local: LocalRepository, role: DemoRole): Su
 
     upsertHealthRecord: (i) => local.upsertHealthRecord(i),
     setCareMode: (pid, mode) => local.setCareMode(pid, mode),
-    addVisitQuestion: (pid, text) => local.addVisitQuestion(pid, text),
+    addVisitQuestion: (pid, text, rx) => local.addVisitQuestion(pid, text, rx),
+    updateVisitQuestion: (id, text) => local.updateVisitQuestion(id, text),
     toggleVisitQuestion: (id) => local.toggleVisitQuestion(id),
     deleteVisitQuestion: (id) => local.deleteVisitQuestion(id),
     setVisitQuestionShared: (id, shared) => local.setVisitQuestionShared(id, shared),

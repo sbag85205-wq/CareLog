@@ -224,14 +224,26 @@ export function createLocalStorageRepository(options: LocalRepositoryOptions = {
       }, true);
     },
 
-    addVisitQuestion(patientId, text) {
+    addVisitQuestion(patientId, text, prescriptionId) {
       return write<VisitQuestion>(() => {
         const trimmed = text.trim();
         if (!trimmed || trimmed.length > 200) {
           throw new CareLogError("invalid_input", "질문은 1~200자로 입력해 주세요.");
         }
-        const q: VisitQuestion = { id: newId("VQ"), patientId, text: trimmed, done: false, createdAt: nowISO() };
+        const now = nowISO();
+        const q: VisitQuestion = { id: newId("VQ"), patientId, text: trimmed, done: false, prescriptionId, createdAt: now, updatedAt: now };
         return { result: q, mutate: (d) => ({ ...d, visitQuestions: [...d.visitQuestions, q] }) };
+      }, false);
+    },
+
+    updateVisitQuestion(id, text) {
+      return write<void>(() => {
+        const t = text.trim();
+        if (!t || t.length > 200) throw new CareLogError("invalid_input", "질문은 1~200자로 입력해 주세요.");
+        return {
+          result: undefined,
+          mutate: (d) => ({ ...d, visitQuestions: d.visitQuestions.map((q) => (q.id === id ? { ...q, text: t, updatedAt: nowISO() } : q)) }),
+        };
       }, false);
     },
 

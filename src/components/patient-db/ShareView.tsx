@@ -6,14 +6,16 @@ import { PageTitle } from "@/components/patient-ui/AppShell";
 import { Alert, CardHeading, ChipGroup, Notice, PButton, PCard, StatusPill, TextField } from "@/components/patient-ui/kit";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { formatDateTime } from "@/lib/date";
+import { FEATURES } from "@/lib/features";
 import { SCOPE_LABEL } from "@/lib/labels";
 import type { DbSnapshot, Grant, SupabaseRepository } from "@/lib/repository/supabase";
 import type { AccessScope } from "@/types";
 
-const SCOPES: AccessScope[] = ["records", "medications", "meals", "requests"];
+// 새 버전: 병동 흐름(식사·생활 요청) 공유 범위는 숨김 — 이미 받은 공유 범위는 그대로 표시
+const SCOPES: AccessScope[] = FEATURES.WARD ? ["records", "medications", "meals", "requests"] : ["records", "medications"];
 const SCOPE_HINT: Record<AccessScope, string> = {
   records: "컨디션·메모 기록",
-  medications: "'보호자에게 공개'를 켠 약만",
+  medications: "'보호자와 공유'를 켠 처방·복용 경험과 '보호자에게 공개'를 켠 약만",
   meals: "입원 중 식사 기록",
   requests: "생활 요청과 처리 상태",
 };
@@ -27,7 +29,11 @@ const toggle = (list: AccessScope[], s: AccessScope) => (list.includes(s) ? list
 export function ShareView({ snapshot, patientId, repo }: { snapshot: DbSnapshot; patientId: string; repo: SupabaseRepository }) {
   const [email, setEmail] = useState("");
   const [scopes, setScopes] = useState<AccessScope[]>(["records"]);
-  const [link, setLink] = useState<{ url: string; email: string; expiresAt: string } | null>(null);
+  const [link, setLink] = useState<{
+    url: string;
+    email: string;
+    expiresAt: string;
+  } | null>(null);
   const [copied, setCopied] = useState(false);
   const invite = useAsyncAction();
   const list = useAsyncAction();
@@ -54,7 +60,11 @@ export function ShareView({ snapshot, patientId, repo }: { snapshot: DbSnapshot;
               setCopied(false);
               const r = await invite.run(() => repo.inviteGuardian(patientId, email, scopes));
               if (r.ok) {
-                setLink({ url: `${window.location.origin}/invite#t=${r.value.token}`, email: email.trim().toLowerCase(), expiresAt: r.value.expiresAt });
+                setLink({
+                  url: `${window.location.origin}/invite#t=${r.value.token}`,
+                  email: email.trim().toLowerCase(),
+                  expiresAt: r.value.expiresAt,
+                });
                 setEmail("");
               }
             }}

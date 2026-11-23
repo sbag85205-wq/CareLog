@@ -1,7 +1,7 @@
 "use client";
 
 import { HeartHandshake } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { MealsSection, RequestCard } from "@/components/patient-db/CareSections";
 import { MedicationsView } from "@/components/patient-db/MedicationsView";
 import { ConditionTrend } from "@/components/patient-db/PatientRecordsView";
@@ -11,6 +11,12 @@ import { CONDITION_WORD, SLEEP_WORD } from "@/components/patient-ui/labels";
 import { useDbApp } from "@/hooks/useDbApp";
 import { formatKoreanDate, formatKoreanTime, todayISO } from "@/lib/date";
 import { currentAdmission } from "@/lib/domain/admissions";
+import { RxHistory } from "@/components/rx/RxHistory";
+import { FEATURES } from "@/lib/features";
+import { forPatient, type RxSnapshot } from "@/lib/rx/model";
+import { useRxSnapshot, useRxStore, RxStoreProvider } from "@/lib/rx/store";
+import { createSupabaseRxStore } from "@/lib/rx/supabase-store";
+import { getBrowserClient } from "@/lib/supabase/browser";
 import { MODE_LABEL, roomLabel, SCOPE_LABEL } from "@/lib/labels";
 import type { DbSnapshot } from "@/lib/repository/supabase";
 import { medicationsOf, recordsOf, requestsOf } from "@/lib/selectors";
@@ -26,6 +32,11 @@ export const GUARDIAN_TABS: ShellTab<Tab>[] = [{ id: "home", label: "안부", ic
 export function GuardianApp() {
   const { repo, snapshot, loadState, ready, logout } = useDbApp("guardian");
   const [selected, setSelected] = useState<string | null>(null);
+  // 공유받은 처방 (RLS: 환자가 '보호자와 공유'를 켠 처방 + 약 정보 공유 범위)
+  const rxStore = useMemo(() => (ready ? createSupabaseRxStore(getBrowserClient()!) : null), [ready]);
+  useEffect(() => {
+    void rxStore?.load();
+  }, [rxStore]);
 
   return (
     <AppShell
@@ -39,7 +50,7 @@ export function GuardianApp() {
       onRetry={() => void repo?.load()}
       ready={ready}
     >
-      {ready && snapshot && <GuardianHome snapshot={snapshot} selected={selected} onSelect={setSelected} />}
+      <RxStoreProvider value={rxStore}>{ready && snapshot && <GuardianHome snapshot={snapshot} selected={selected} onSelect={setSelected} />}</RxStoreProvider>
     </AppShell>
   );
 }
@@ -53,7 +64,9 @@ export function GuardianHome({ snapshot, selected, onSelect }: { snapshot: DbSna
         <PageTitle title="안부" />
         <PCard>
           <p className="font-bold text-ink">공유받은 정보가 없어요.</p>
-          <p className="mt-2 text-sm text-ink-soft">환자에게 받은 초대 링크를 이 계정으로 열어 수락해 주세요. 공유가 철회되면 여기에서 더 이상 보이지 않아요.</p>
+          <p className="mt-2 text-sm text-ink-soft">
+            환자에게 받은 초대 링크를 이 계정으로 열어 수락해 주세요. 공유가 철회되면 여기에서 더 이상 보이지 않아요.
+          </p>
         </PCard>
       </div>
     );
@@ -77,14 +90,18 @@ function GuardianPatient({ snapshot, patient, scopes }: { snapshot: DbSnapshot; 
   const records = recordsOf(snapshot, patient.id);
   const admission = currentAdmission(snapshot, patient.id);
   const requests = requestsOf(snapshot, patient.id).slice(0, 8);
+  const rxAll = useRxSnapshot(useRxStore());
+  const rx = rxAll ? forPatient(rxAll, patient.id) : null;
   return (
     <div className="space-y-6">
       <section>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-[1.75rem] leading-tight font-extrabold tracking-tight break-keep text-ink sm:text-3xl">{patient.name} 님의 안부</h1>
-          <StatusPill tone="outline">
-            {MODE_LABEL[patient.careMode]} 중{admission && admission.room !== "미입력" ? ` · ${roomLabel(admission.room)}` : ""}
-          </StatusPill>
+          {FEATURES.WARD && (
+            <StatusPill tone="outline">
+              {MODE_LABEL[patient.careMode]} 중{admission && admission.room !== "미입력" ? ` · ${roomLabel(admission.room)}` : ""}
+            </StatusPill>
+          )}
         </div>
         <p className="mt-2 text-sm text-ink-soft">공유받은 항목: {scopes.length ? scopes.map((s) => SCOPE_LABEL[s]).join(" · ") : "없음"} · 읽기 전용</p>
       </section>
@@ -103,7 +120,7 @@ function GuardianPatient({ snapshot, patient, scopes }: { snapshot: DbSnapshot; 
           )}
         </div>
         <div className="space-y-5">
-          {has("requests") && (
+          {FEATURES.WARD && has("requests") && (
             <section aria-labelledby="g-req" className="space-y-3">
               <h2 id="g-req" className="px-1 text-xl font-bold text-ink">
                 생활 요청
@@ -120,7 +137,8 @@ function GuardianPatient({ snapshot, patient, scopes }: { snapshot: DbSnapshot; 
         </div>
       </div>
 
-      {has("meals") && patient.careMode === "inpatient" && <MealsSection snapshot={snapshot} patientId={patient.id} readOnly />}
+      {FEATURES.WARD && has("meals") && patient.careMode === "inpatient" && <MealsSection snapshot={snapshot} patientId={patient.id} readOnly />}
+      {has("medications") && <SharedRx rx={rx} />}
       {has("medications") && (
         <MedicationsView
           medications={medicationsOf(snapshot, patient.id, "guardian")}
@@ -131,6 +149,28 @@ function GuardianPatient({ snapshot, patient, scopes }: { snapshot: DbSnapshot; 
         />
       )}
     </div>
+  );
+}
+
+/** 공유받은 처방 — 읽기 전용 처방 이력 */
+function SharedRx({ rx }: { rx: RxSnapshot | null }) {
+  if (!rx) return null;
+  return (
+    <section aria-labelledby="g-rx" className="space-y-3">
+      <div className="px-1">
+        <h2 id="g-rx" className="text-xl font-bold text-ink">
+          공유된 처방
+        </h2>
+        <p className="text-sm text-ink-soft">환자가 ‘보호자와 공유’를 켠 처방과 복용 경험만 보여요.</p>
+      </div>
+      {rx.available ? (
+        <RxHistory snapshot={rx} store={null} questions={[]} readOnly />
+      ) : (
+        <PCard tone="ivory">
+          <p className="text-sm text-ink-soft">{rx.message}</p>
+        </PCard>
+      )}
+    </section>
   );
 }
 

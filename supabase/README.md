@@ -258,3 +258,25 @@ node --env-file=.env.local scripts/provision-virtual-patient.mjs   # 환자 A, B
 - `svc_mark_password_set`: 이전 방식(환자 코드) 환자를 관리자가 비밀번호 재설정하면 바로 사용 가능하도록 표시 (서버 키만)
 - 테스트: `supabase/tests/admin-accounts.test.ts`
 - 원격 적용: `status` → `dry-run`(이 파일 1개만) → 적용 → `status` → `verify-catalog`(테이블 16·정책 33)
+
+## 6단계: 처방 이력 (migration 10 — 아직 원격 미적용)
+
+`migrations/20261123090000_prescription_history.sql` — 기존 테이블·데이터를 바꾸지 않고 **추가만** 하는 migration.
+
+- 새 테이블: `prescriptions`(처방 1건: 처방일·진료과·의료기관·복약 안내·★ 보관·보호자와 공유, `(patient_id, request_id)` 유일 → 다시 눌러도 1건),
+  `prescription_items`(약: 이름·함량·1회량·횟수·시점·기간·주의사항(처방전/식약처 구분)·품목기준코드·지금 복용 중),
+  `prescription_notes`(복용 후 느낀 점: 태그 배열·메모, 처방 전체 또는 약 1개)
+- `visit_questions.prescription_id` 열 추가 (nullable, 기존 질문 그대로)
+- 트리거 `private.check_rx_links`: 약·메모·질문이 같은 환자의 처방에만 연결되도록
+- RLS 정책 10개: 환자 본인 읽기·쓰기 / 담당 의료진 읽기 / 보호자는 `medications` 공유 범위 + 처방의 `visible_to_guardian`일 때만 읽기 (`private.rx_shared_with_me`)
+- RPC `create_prescription(...)`(security invoker): 처방 + 약을 한 트랜잭션으로, 같은 `request_id`면 기존 ID 반환
+- 테스트: `supabase/tests/prescription-history.test.ts` (PGlite), `verify/10_post_apply_catalog_readonly.sql` 기준 **테이블 19 · 정책 43**
+
+### Production 반영 때 순서 (별도 승인 후)
+
+1. Supabase CLI 액세스 토큰 갱신 (현재 토큰은 401 — `.env.local`에서 편집기로 교체, 값은 출력하지 않음)
+2. `bash scripts/supabase-remote.sh status` → 9개 적용, 10번만 미적용인지 확인
+3. `bash scripts/supabase-remote.sh dry-run` → 이 파일 1개만 나오는지 확인 (`supabase/drafts/`의 재발급 SQL은 대상 아님)
+4. 적용 → `status` → `verify-catalog`(테이블 19 · 정책 43)
+5. 앱은 표를 자동으로 알아채므로 별도 설정 없음 — 적용 전 Preview/Production에서는 ‘처방 이력은 DB 업데이트 후…’ 안내와 함께 예전처럼 `medications`에 등록
+6. `npm run test:e2e:remote` — 처방전 등록 테스트가 처방 이력 모드(prescription_items)로 자동 전환해 확인

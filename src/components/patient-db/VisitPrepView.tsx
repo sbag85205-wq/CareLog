@@ -1,12 +1,14 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Plus, Presentation, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { PageTitle } from "@/components/patient-ui/AppShell";
-import { Alert, CardHeading, cn, PButton, PCard, StatusPill, Switch, TextField } from "@/components/patient-ui/kit";
+import { Alert, CardHeading, cn, Notice, PButton, PCard, SoftSheet, StatusPill, Switch, TextField } from "@/components/patient-ui/kit";
+import { VisitShow } from "@/components/rx/RxDetail";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
-import { addDays, diffDays, formatLongKoreanDate } from "@/lib/date";
+import { addDays, diffDays, formatDateTime, formatLongKoreanDate } from "@/lib/date";
 import type { SupabaseRepository } from "@/lib/repository/supabase";
+import { itemsOf, prescriptionLabel, sortPrescriptions, type RxSnapshot } from "@/lib/rx/model";
 import { summarizeRecent } from "@/lib/visit-summary";
 import type { HealthRecord, Patient, VisitQuestion } from "@/types";
 
@@ -17,18 +19,22 @@ export function VisitPrepView({
   questions,
   today,
   repo,
+  rx,
 }: {
   patient: Patient;
   records: HealthRecord[];
   questions: VisitQuestion[];
   today: string;
   repo: SupabaseRepository;
+  rx?: RxSnapshot | null;
 }) {
+  const [showId, setShowId] = useState<string | null>(null);
+  const recent = rx?.available ? sortPrescriptions(rx.prescriptions).slice(0, 3) : [];
+  const shown = rx?.prescriptions.find((p) => p.id === showId);
   const s = summarizeRecent(records, 14, today);
   const thisWeek = summarizeRecent(records, 7, today);
   const lastWeek = summarizeRecent(records, 7, addDays(today, -7));
-  const painDiff =
-    thisWeek.avgPain !== "-" && lastWeek.avgPain !== "-" ? Math.round((Number(thisWeek.avgPain) - Number(lastWeek.avgPain)) * 10) / 10 : null;
+  const painDiff = thisWeek.avgPain !== "-" && lastWeek.avgPain !== "-" ? Math.round((Number(thisWeek.avgPain) - Number(lastWeek.avgPain)) * 10) / 10 : null;
 
   return (
     <div className="space-y-5">
@@ -36,8 +42,37 @@ export function VisitPrepView({
       <div className="grid gap-5 lg:grid-cols-2 lg:items-start">
         <div className="space-y-5">
           <NextVisitCard patient={patient} today={today} repo={repo} />
+          {rx && (
+            <PCard aria-labelledby="show-title">
+              <CardHeading id="show-title" title="진료 때 보여주기" sub="처방·당시 약·복용 경험·질문을 한 화면으로 보여 줘요." />
+              {!rx.available ? (
+                <Notice>{rx.message}</Notice>
+              ) : recent.length === 0 ? (
+                <p className="text-sm text-ink-soft">처방을 등록하면 여기서 바로 보여 줄 수 있어요.</p>
+              ) : (
+                <ul className="space-y-2">
+                  {recent.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        onClick={() => setShowId(p.id)}
+                        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-line bg-white p-3 text-left hover:border-sage-300"
+                      >
+                        <span className="font-semibold text-ink">{prescriptionLabel(p, itemsOf(rx, p.id).length)}</span>
+                        <Presentation className="h-5 w-5 shrink-0 text-sage-700" aria-hidden />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </PCard>
+          )}
           <PCard aria-labelledby="sum-title">
-            <CardHeading id="sum-title" title="최근 2주 요약" sub={`${formatLongKoreanDate(addDays(today, -13), false).replace(/ \S+요일$/, "")} – ${formatLongKoreanDate(today, false).replace(/ \S+요일$/, "")}`} />
+            <CardHeading
+              id="sum-title"
+              title="최근 2주 요약"
+              sub={`${formatLongKoreanDate(addDays(today, -13), false).replace(/ \S+요일$/, "")} – ${formatLongKoreanDate(today, false).replace(/ \S+요일$/, "")}`}
+            />
             <dl className="divide-y divide-line">
               <Row label="기록한 날" value={`${s.count} / 14일`} />
               <Row label="평균 컨디션" value={s.avgCondition === "-" ? "—" : `${s.avgCondition} / 5점`} strong />
@@ -54,8 +89,11 @@ export function VisitPrepView({
             <p className="mt-3 text-xs text-ink-soft">진료 때 이 요약을 의료진에게 보여 주세요. 의료적 판단은 의료진과 상담해 주세요.</p>
           </PCard>
         </div>
-        <QuestionsCard patientId={patient.id} questions={questions} repo={repo} />
+        <QuestionsCard patientId={patient.id} questions={questions} repo={repo} rx={rx} />
       </div>
+      <SoftSheet open={Boolean(shown)} title="진료 때 보여주기" onClose={() => setShowId(null)}>
+        {shown && rx && <VisitShow p={shown} snapshot={rx} questions={questions} repo={repo} />}
+      </SoftSheet>
     </div>
   );
 }
@@ -104,9 +142,7 @@ function NextVisitCard({ patient, today, repo }: { patient: Patient; today: stri
           <p className="mt-2 text-[1.6rem] leading-tight font-extrabold text-sage-900">
             {patient.nextVisitDate ? formatLongKoreanDate(patient.nextVisitDate, false) : "아직 정하지 않았어요"}
           </p>
-          {d !== null && (
-            <p className="mt-1 text-sm text-sage-800">{d < 0 ? "지난 일정이에요" : d === 0 ? "오늘이에요" : `${d}일 남았어요`}</p>
-          )}
+          {d !== null && <p className="mt-1 text-sm text-sage-800">{d < 0 ? "지난 일정이에요" : d === 0 ? "오늘이에요" : `${d}일 남았어요`}</p>}
           <PButton variant="secondary" size="sm" className="mt-4" onClick={() => setEditing(true)}>
             {patient.nextVisitDate ? "진료일 변경" : "진료일 입력"}
           </PButton>
@@ -116,8 +152,20 @@ function NextVisitCard({ patient, today, repo }: { patient: Patient; today: stri
   );
 }
 
-function QuestionsCard({ patientId, questions, repo }: { patientId: string; questions: VisitQuestion[]; repo: SupabaseRepository }) {
+function QuestionsCard({
+  patientId,
+  questions,
+  repo,
+  rx,
+}: {
+  patientId: string;
+  questions: VisitQuestion[];
+  repo: SupabaseRepository;
+  rx?: RxSnapshot | null;
+}) {
   const [text, setText] = useState("");
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
   const add = useAsyncAction();
   const list = useAsyncAction();
   return (
@@ -132,7 +180,14 @@ function QuestionsCard({ patientId, questions, repo }: { patientId: string; ques
           if (r.ok) setText("");
         }}
       >
-        <TextField className="flex-1" label="새 질문" value={text} maxLength={200} onChange={(e) => setText(e.target.value)} placeholder="예: 두통약을 같이 먹어도 되나요?" />
+        <TextField
+          className="flex-1"
+          label="새 질문"
+          value={text}
+          maxLength={200}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="예: 두통약을 같이 먹어도 되나요?"
+        />
         <PButton type="submit" size="md" icon={Plus} className="h-14" disabled={!text.trim() || add.pending} aria-label="질문 추가">
           추가
         </PButton>
@@ -152,7 +207,46 @@ function QuestionsCard({ patientId, questions, repo }: { patientId: string; ques
                   aria-label={`${q.text} — 물어봤어요`}
                   onChange={() => void list.run(() => repo.toggleVisitQuestion(q.id))}
                 />
-                <p className={cn("min-w-0 flex-1 break-words", q.done ? "text-ink-soft line-through" : "text-ink")}>{q.text}</p>
+                {editId === q.id ? (
+                  <form
+                    className="flex min-w-0 flex-1 flex-wrap gap-2"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (!editText.trim()) return;
+                      const r = await list.run(() => repo.updateVisitQuestion(q.id, editText));
+                      if (r.ok) setEditId(null);
+                    }}
+                  >
+                    <input
+                      aria-label="질문 수정"
+                      value={editText}
+                      maxLength={200}
+                      onChange={(e) => setEditText(e.target.value)}
+                      className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-white px-3 text-ink outline-none focus:border-sage-500 focus:ring-4 focus:ring-sage-100"
+                    />
+                    <PButton type="submit" size="sm" disabled={!editText.trim() || list.pending}>
+                      저장
+                    </PButton>
+                    <PButton size="sm" variant="ghost" onClick={() => setEditId(null)}>
+                      취소
+                    </PButton>
+                  </form>
+                ) : (
+                  <p className={cn("min-w-0 flex-1 break-words", q.done ? "text-ink-soft line-through" : "text-ink")}>{q.text}</p>
+                )}
+                {editId !== q.id && (
+                  <button
+                    type="button"
+                    aria-label={`${q.text} 고치기`}
+                    onClick={() => {
+                      setEditId(q.id);
+                      setEditText(q.text);
+                    }}
+                    className="shrink-0 rounded-xl p-1.5 text-ink-soft hover:bg-ivory-deep hover:text-ink"
+                  >
+                    <Pencil className="h-4 w-4" aria-hidden />
+                  </button>
+                )}
                 <button
                   type="button"
                   aria-label={`${q.text} 삭제`}
@@ -162,9 +256,17 @@ function QuestionsCard({ patientId, questions, repo }: { patientId: string; ques
                   <Trash2 className="h-4 w-4" aria-hidden />
                 </button>
               </div>
+              <p className="mt-1 pl-8 text-xs text-ink-soft">
+                {questionRef(q, rx)}작성 {formatDateTime(q.createdAt)}
+                {q.updatedAt && q.updatedAt.slice(0, 16) !== q.createdAt.slice(0, 16) && ` · 수정 ${formatDateTime(q.updatedAt)}`}
+              </p>
               <div className="mt-2 flex items-center gap-2 pl-8">
                 <div className="flex-1">
-                  <Switch label="의료진과 공유" checked={Boolean(q.sharedWithStaff)} onChange={(v) => void list.run(() => repo.setVisitQuestionShared(q.id, v))} />
+                  <Switch
+                    label="의료진과 공유"
+                    checked={Boolean(q.sharedWithStaff)}
+                    onChange={(v) => void list.run(() => repo.setVisitQuestionShared(q.id, v))}
+                  />
                 </div>
                 {q.done && <StatusPill tone="ivory">물어봤어요</StatusPill>}
               </div>
@@ -174,4 +276,11 @@ function QuestionsCard({ patientId, questions, repo }: { patientId: string; ques
       )}
     </PCard>
   );
+}
+
+/** 처방에서 담은 질문이면 어느 처방인지 앞에 표시 */
+function questionRef(q: VisitQuestion, rx?: RxSnapshot | null): string {
+  if (!q.prescriptionId || !rx?.available) return "";
+  const p = rx.prescriptions.find((x) => x.id === q.prescriptionId);
+  return p ? `${prescriptionLabel(p, itemsOf(rx, p.id).length)} · ` : "";
 }

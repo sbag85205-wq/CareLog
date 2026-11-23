@@ -137,3 +137,18 @@ describe("검색 결과", () => {
 });
 
 void spy;
+
+describe("제품 상세 주의사항 (getDrugPrdtPrmsnDtlInq08)", () => {
+  it("외부로는 품목기준코드만, 주의사항 문서를 짧게 요약", async () => {
+    const { getDrugCaution, summarizeCautionDoc } = await import("./drug-search");
+    const doc = `<DOC title="사용상의주의사항" type="NB"><SECTION title=""><ARTICLE title="1. 다음 환자에는 투여하지 말 것"><PARAGRAPH tagName="p"><![CDATA[(가상) 이 약에 과민증 환자]]></PARAGRAPH></ARTICLE><ARTICLE title="2. 졸음이 올 수 있으므로 운전에 주의"></ARTICLE></SECTION></DOC>`;
+    expect(summarizeCautionDoc(doc)).toBe("1. 다음 환자에는 투여하지 말 것: (가상) 이 약에 과민증 환자 / 2. 졸음이 올 수 있으므로 운전에 주의");
+    const f = fakeFetch({ header: { resultCode: "00" }, body: { items: [{ ITEM_SEQ: "200000001", ITEM_NAME: "가상정", NB_DOC_DATA: doc }] } });
+    const r = await getDrugCaution("200000001", { serviceKey: FAKE_KEY, fetch: f });
+    expect(r).toMatchObject({ ok: true, itemSeq: "200000001" });
+    const url = new URL(f.calls[0].url);
+    expect([...url.searchParams.keys()].sort()).toEqual(["numOfRows", "item_seq", "pageNo", "serviceKey", "type"].sort());
+    expect(await getDrugCaution("가상", { serviceKey: FAKE_KEY, fetch: f })).toEqual({ ok: false, reason: "bad_query" });
+    expect(await getDrugCaution("200000001", { serviceKey: FAKE_KEY, fetch: fakeFetch({ header: { resultCode: "03" }, body: {} }) })).toEqual({ ok: false, reason: "not_found" });
+  });
+});

@@ -47,7 +47,9 @@ export interface CareLogRepository {
   /** 환자 자기기록 모드 전환. 입원으로 바꾸면 새 입원 이력, 통원으로 바꾸면 진행 중인 입원에 퇴원일 기록 */
   setCareMode(patientId: string, mode: CareMode): Promise<void>;
 
-  addVisitQuestion(patientId: string, text: string): Promise<VisitQuestion>;
+  addVisitQuestion(patientId: string, text: string, prescriptionId?: string): Promise<VisitQuestion>;
+  /** 질문 문장 수정 (수정 시각 기록) */
+  updateVisitQuestion(id: string, text: string): Promise<void>;
   toggleVisitQuestion(id: string): Promise<void>;
   deleteVisitQuestion(id: string): Promise<void>;
 

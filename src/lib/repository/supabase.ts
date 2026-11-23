@@ -226,7 +226,9 @@ const mapQuestion = (q: any): VisitQuestion => ({
   text: q.text,
   done: Boolean(q.done),
   sharedWithStaff: Boolean(q.shared_with_staff),
+  prescriptionId: q.prescription_id ?? undefined,
   createdAt: iso(q.created_at),
+  updatedAt: q.updated_at ? iso(q.updated_at) : undefined,
 });
 const mapMeal = (m: any): MealLog => ({
   id: m.id,
@@ -354,7 +356,8 @@ export function createSupabaseRepository(
           .order("record_date", { ascending: true }),
       ),
       byPatients(() => client.from("medications").select(MED_COLUMNS).in("patient_id", ids).eq("is_active", true).order("created_at", { ascending: true })),
-      byPatients(() => client.from("visit_questions").select("id, patient_id, text, done, shared_with_staff, created_at").in("patient_id", ids).order("created_at", { ascending: true })),
+      // "*": 처방 연결 컬럼(migration 10)이 없는 DB에서도 그대로 동작
+      byPatients(() => client.from("visit_questions").select("*").in("patient_id", ids).order("created_at", { ascending: true })),
       byPatients(() => client.from("meal_logs").select("id, patient_id, meal_date, slot, meal_type, intake, digestion, updated_at").in("patient_id", ids).gte("meal_date", addDays(t, -(MEAL_DAYS - 1)))),
       byPatients(() => client.from("life_requests").select(REQUEST_COLUMNS).in("patient_id", ids).order("created_at", { ascending: false }).limit(300)),
       byPatients(() => client.from("staff_reviews").select("id, patient_id, staff_id, action, created_at").in("patient_id", ids).order("created_at", { ascending: false }).limit(300)),
@@ -475,15 +478,23 @@ export function createSupabaseRepository(
       await refresh();
     },
 
-    async addVisitQuestion(patientId, text) {
+    async addVisitQuestion(patientId, text, prescriptionId) {
       const { data: row, error } = await client
         .from("visit_questions")
-        .insert({ patient_id: patientId, text: text.trim() })
-        .select("id, patient_id, text, done, shared_with_staff, created_at")
+        .insert({ patient_id: patientId, text: text.trim(), ...(prescriptionId && { prescription_id: prescriptionId }) })
+        .select("*")
         .single();
       if (error || !row) throw toCareLogError(error);
       await refresh();
       return mapQuestion(row);
+    },
+    async updateVisitQuestion(id, text) {
+      const t = text.trim();
+      if (!t || t.length > 200) throw new CareLogError("invalid_input", "질문은 1~200자로 입력해 주세요.");
+      const { data: rows, error } = await client.from("visit_questions").update({ text: t }).eq("id", id).select("id");
+      if (error) throw toCareLogError(error);
+      ensureChanged(rows, "질문");
+      await refresh();
     },
     async toggleVisitQuestion(id) {
       const q = data?.visitQuestions.find((x) => x.id === id);

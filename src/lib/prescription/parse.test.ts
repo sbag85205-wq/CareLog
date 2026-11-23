@@ -137,3 +137,28 @@ describe("PDF 글자 조각 → 줄", () => {
     expect(lines).toEqual(["처 방 전", "케어가상정500밀리그램 1 3"]);
   });
 });
+
+describe("처방전 머리 정보", () => {
+  it("처방일(교부 연월일)·진료과·의료기관·복약 안내", async () => {
+    const { parsePrescriptionMeta } = await import("./parse");
+    const m = parsePrescriptionMeta(`처 방 전
+환자 성명 가상환자  생년월일 1970.01.01
+의료기관 명칭 가상이비인후과의원  전화번호 000-0000-0000
+진료과 이비인후과
+교부 연월일 2026년 9월 1일
+조제 연월일 2026-09-02
+복약 안내: (가상) 졸음이 올 수 있으니 운전에 주의하세요.`);
+    expect(m).toEqual({
+      prescribedOn: "2026-09-01",
+      department: "이비인후과",
+      clinic: "가상이비인후과의원",
+      guidance: "복약 안내: (가상) 졸음이 올 수 있으니 운전에 주의하세요.",
+    });
+  });
+  it("진료과가 불명확(여러 개·없음)하면 비워 둠, 잘못된 날짜는 무시", async () => {
+    const { parsePrescriptionMeta } = await import("./parse");
+    expect(parsePrescriptionMeta("가상내과의원 외 정형외과 협진\n교부 2026.02.30").department).toBeUndefined();
+    expect(parsePrescriptionMeta("가상내과의원 외 정형외과 협진\n교부 2026.02.30").prescribedOn).toBeUndefined();
+    expect(parsePrescriptionMeta("가상정형외과의원").department).toBe("정형외과"); // '외과'로 잘못 읽지 않음
+  });
+});

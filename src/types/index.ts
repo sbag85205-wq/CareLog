@@ -123,7 +123,11 @@ export interface VisitQuestion {
   done: boolean;
   /** 담당 의료진에게 공유 (DB 모드, 기본 false) */
   sharedWithStaff?: boolean;
+  /** 연결된 처방 ("다음 진료 질문에 담기") */
+  prescriptionId?: string;
   createdAt: string;
+  /** 마지막 수정 시각 */
+  updatedAt?: string;
 }
 
 export type MealSlot = "breakfast" | "lunch" | "dinner";

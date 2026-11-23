@@ -2,8 +2,9 @@
  * carelog-dev 역할별 실제 연동 검증 (브라우저 + Supabase Auth + 실제 RLS)
  *
  * 가상 환자 A·B, 간호사 S1(A 담당)·S2(B만 담당), 보호자 G1(A가 초대)·G2(초대 없음)·G3(A가 초대 후 철회)
- * 흐름: 통원 기록 → 내 약·진료 질문 → 보호자 초대 → 입원 전환 → 식사·생활 요청
- *      → 보호자 수락·확인 → 담당 간호사 검토·요청 처리 → 환자·보호자 상태 확인 → 재로그인 후 유지
+ * 흐름: 오늘 기록 → 내 약·진료 질문 → 보호자 초대 → 보호자 수락·확인 → 담당 간호사 검토 → 재로그인 후 유지
+ * 새 버전(처방 이력 중심)에서는 통원·입원 전환·식사·생활 요청 화면을 숨김 (FEATURES.WARD).
+ * 생활 요청 행은 차단 검증(6번)을 위해 환자 본인 세션으로 DB에 직접 만듦.
  * 차단: 미배정 간호사·초대 없는 보호자·철회된 보호자 (각자의 세션으로 조회)
  * 모든 계정은 테스트가 끝나면 삭제
  */
@@ -56,14 +57,22 @@ async function newPage(browser: Browser, viewport = { width: 390, height: 844 })
   return ctx.newPage();
 }
 
-test("1. 환자 A: 통원 기록 → 내 약 → 진료 준비 → 보호자 초대 → 입원 전환 → 식사·생활 요청", async ({ browser }) => {
+test("1. 환자 A: 지금 복용 중 홈 → 오늘 기록 → 내 약 → 진료 준비 → 보호자 초대", async ({ browser }) => {
   const page = await newPage(browser);
   await patientLogin(page, A);
 
-  // 통원: 오늘의 컨디션
-  await fillCondition(page, 4);
-  await page.getByRole("button", { name: "기록 저장" }).click();
-  await expect(page.getByText("저장되었습니다")).toBeVisible();
+  // 새 홈: 지금 복용 중 중심, 병동 기능 없음
+  await expect(page.getByRole("heading", { name: "지금 복용 중" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "이용 모드" })).toHaveCount(0);
+  await expect(page.getByText("오늘의 식사")).toHaveCount(0);
+
+  // 오늘의 컨디션 (홈에서 열기)
+  await page.getByRole("button", { name: "오늘 컨디션 기록" }).click();
+  const cond = page.getByRole("dialog", { name: "오늘 컨디션 기록" });
+  await fillCondition(cond, 4);
+  await cond.getByRole("button", { name: "기록 저장" }).click();
+  await expect(cond).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "오늘 기록 수정" })).toBeVisible();
 
   // 내 약: 추가(공개·비공개) → 수정
   await menu(page, "내 약").click();
@@ -71,7 +80,7 @@ test("1. 환자 A: 통원 기록 → 내 약 → 진료 준비 → 보호자 초
     [MED_PUBLIC, true],
     [MED_PRIVATE, false],
   ] as const) {
-    await page.getByRole("button", { name: "약 추가" }).first().click();
+    await page.getByRole("button", { name: "약 직접 추가" }).click();
     const dlg = page.getByRole("dialog");
     await dlg.getByLabel("약 이름").fill(name);
     await dlg.getByLabel("1회 복용량 (안내받은 대로)").fill("1회 1정");
@@ -104,10 +113,10 @@ test("1. 환자 A: 통원 기록 → 내 약 → 진료 준비 → 보호자 초
   await shot(page, "m-patient-visit");
   await expectNoHorizontalOverflow(page);
 
-  // 보호자 공유: G1(건강기록·약 정보·생활 요청), G3(건강기록)
+  // 보호자 공유: G1(건강기록·약 정보), G3(건강기록) — 식사·생활 요청 항목은 새 버전에서 숨김
   await menu(page, "보호자 공유").click();
   for (const [g, extra] of [
-    [G1, ["약 정보", "생활 요청"]],
+    [G1, ["약 정보"]],
     [G3, []],
   ] as const) {
     await page.getByLabel("보호자 이메일").fill(g.email);
@@ -121,54 +130,26 @@ test("1. 환자 A: 통원 기록 → 내 약 → 진료 준비 → 보호자 초
     for (const s of extra) await page.getByRole("group", { name: "공유할 항목" }).getByRole("button", { name: s }).click(); // 다음 초대를 위해 원래대로
   }
   await expect(page.getByText(G1.email)).toBeVisible();
+  await expect(page.getByRole("group", { name: "공유할 항목" }).getByRole("button")).toHaveText(["건강기록", "약 정보"]);
   await expectNoHorizontalOverflow(page);
 
-  // 입원 전환 (자기기록) → 오늘 기록은 요약 카드로, 통원 기록은 그대로 이어짐
-  await menu(page, "홈").click();
-  await page.getByRole("group", { name: "이용 모드" }).getByRole("button", { name: "입원" }).click();
-  const sheet = page.getByRole("dialog", { name: "입원 모드로 바꾸기" });
-  await sheet.getByLabel("병동 (선택)").fill("가상 병동");
-  await sheet.getByLabel("병실 (선택)").fill("302");
-  await sheet.getByRole("button", { name: "입원으로 바꾸기" }).click();
-  await expect(page.getByText("입원 중", { exact: true })).toBeVisible();
-  await expect(page.getByText(/302호 · 자기기록/)).toBeVisible();
-  await expect(page.getByText("통원 때의 기록도 그대로 이어져요.")).toBeVisible();
-
-  // 오늘의 식사: 점심 섭취량·소화, 저녁 식사 형태 변경 요청
-  const lunch = page.getByRole("region", { name: "점심 식사" });
-  await lunch.getByRole("group", { name: "점심 섭취량" }).getByRole("button", { name: "대부분" }).click();
-  await lunch.getByRole("group", { name: "점심 소화" }).getByRole("button", { name: "좋음" }).click();
-  await expect(lunch.getByRole("group", { name: "점심 섭취량" }).getByRole("button", { name: "대부분" })).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("region", { name: "저녁 식사" }).getByRole("button", { name: "식사 형태 변경 요청" }).click();
-  await page.getByRole("dialog").getByRole("group", { name: "바꿀 식사 형태" }).getByRole("button", { name: "죽" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "변경 요청 보내기" }).click();
-  await expect(page.getByRole("region", { name: "저녁 식사" }).getByText("변경 요청 중")).toBeVisible();
-
-  // 생활 요청: 물
-  await page.getByRole("button", { name: "물", exact: true }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "요청 보내기" }).click();
-  await expect(page.getByRole("region", { name: "물 요청 접수" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "식사 변경 접수" })).toBeVisible();
-  await shot(page, "m-patient-inpatient-home");
-  await expectNoHorizontalOverflow(page);
-
-  // 기록 보기: 입원 이력 + 기록 당시 모드
-  await menu(page, "기록 보기").click();
-  await expect(page.getByRole("heading", { name: "입원 이력" })).toBeVisible();
-  await expect(page.getByText("가상 병동 · 302호 · 자기기록")).toBeVisible();
+  // 건강 기록
+  await menu(page, "건강 기록").click();
+  await expect(page.getByRole("heading", { name: "건강 기록" })).toBeVisible();
   await shot(page, "m-patient-records");
-  await expect(page.getByText(/^통원 기록 · /)).toBeVisible(); // 오늘 기록은 통원 중에 작성
+  await expectNoHorizontalOverflow(page);
 
-  // DB(본인 세션): 같은 사람의 기록 1건, recorded_in 유지, 입원 이력 1건
+  // DB(본인 세션): 기록 1건 (통원), 입원 이력 없음 / 차단 검증용 생활 요청 1건은 본인 세션으로 직접
   const sa = await userSession(A.email, A.password);
   const { data: recs } = await sa.from("health_records").select("recorded_in").eq("patient_id", A.pid);
   expect(recs).toEqual([{ recorded_in: "outpatient" }]);
-  const { data: adm } = await sa.from("admissions").select("ward, room, discharged_on, source").eq("patient_id", A.pid);
-  expect(adm).toEqual([{ ward: "가상 병동", room: "302", discharged_on: null, source: "self_reported" }]);
+  expect((await sa.from("admissions").select("id").eq("patient_id", A.pid)).data).toEqual([]);
+  const ins = await sa.from("life_requests").insert({ patient_id: A.pid, category: "water", detail: "(가상) 물" });
+  expect(ins.error).toBeNull();
   await page.context().close();
 });
 
-test("2. 보호자 G1·G3: 자기 계정으로 초대 수락 → G1은 최근 안부·생활 요청·공개 약만", async ({ browser }) => {
+test("2. 보호자 G1·G3: 자기 계정으로 초대 수락 → G1은 최근 안부·공개 약만", async ({ browser }) => {
   for (const [g, link] of [
     [G1, linkG1],
     [G3, linkG3],
@@ -184,8 +165,8 @@ test("2. 보호자 G1·G3: 자기 계정으로 초대 수락 → G1은 최근 �
       // 그래프보다 먼저 최근 안부와 기록 시각
       await expect(page.getByRole("heading", { name: /^오늘 오[전후] \d{1,2}:\d{2}에 남긴 안부$/ })).toBeVisible();
       await expect(page.getByRole("region", { name: "최근 안부" }).getByText("좋아요")).toBeVisible();
-      await expect(page.getByRole("region", { name: "물 요청 접수" })).toBeVisible();
       await expect(page.getByRole("region", { name: MED_PUBLIC })).toBeVisible();
+      await expect(page.getByText("생활 요청")).toHaveCount(0); // 병동 화면 숨김
       await expect(page.getByText(MED_PRIVATE)).toHaveCount(0);
       await expect(page.getByText("오늘의 식사")).toHaveCount(0); // 식사는 공유하지 않음
       await shot(page, "m-guardian-home");
@@ -195,7 +176,7 @@ test("2. 보호자 G1·G3: 자기 계정으로 초대 수락 → G1은 최근 �
   }
 });
 
-test("3. 담당 간호사 S1: 담당 환자·공유 질문·검토 저장, 생활 요청 처리(식사 형태 반영)", async ({ browser }) => {
+test("3. 담당 간호사 S1: 담당 환자·공유 질문·검토 저장 (생활 요청 메뉴 없음)", async ({ browser }) => {
   const page = await newPage(browser, { width: 1366, height: 900 });
   await page.goto("/login/member", { waitUntil: "networkidle" });
   await memberLoginForm(page, S1);
@@ -212,28 +193,15 @@ test("3. 담당 간호사 S1: 담당 환자·공유 질문·검토 저장, 생�
   await shot(page, "pc-staff-detail");
   await expectNoHorizontalOverflow(page);
 
-  await menu(page, "생활 요청").click();
-  await shot(page, "pc-staff-requests");
-  for (const cat of ["물 요청", "식사 변경"]) {
-    await page.getByRole("region", { name: `${cat} 접수` }).getByRole("button", { name: "직원 확인" }).click();
-    await page.getByRole("region", { name: `${cat} 직원 확인` }).getByRole("button", { name: "처리 완료" }).click();
-    await expect(page.getByRole("region", { name: new RegExp(`^${cat} `) })).toHaveCount(0); // 진행 중 목록에서 빠짐
-  }
-  await page.getByRole("group", { name: "요청 상태" }).getByRole("button", { name: "처리 완료" }).click();
-  await expect(page.getByRole("region", { name: "물 요청 처리 완료" })).toBeVisible();
-
-  // 식사 변경 완료 → 저녁 식사 형태 죽 (환자 본인 세션으로 확인)
-  const sa = await userSession(A.email, A.password);
-  const { data: meals } = await sa.from("meal_logs").select("slot, meal_type").eq("patient_id", A.pid).eq("meal_date", todayISO()).eq("slot", "dinner");
-  expect(meals).toEqual([{ slot: "dinner", meal_type: "porridge" }]);
+  await expect(menu(page, "생활 요청")).toHaveCount(0);
   await page.context().close();
 });
 
-test("4. 환자 A 재로그인: 처리 완료·식사 형태·약·질문 유지, 검토 메모는 안 보임 → G3 공유 철회", async ({ browser }) => {
+test("4. 환자 A 재로그인: 기록·약·질문 유지, 검토 메모는 안 보임 → G3 공유 철회", async ({ browser }) => {
   const page = await newPage(browser);
   await patientLogin(page, A);
-  await expect(page.getByRole("region", { name: "물 요청 처리 완료" })).toBeVisible();
-  await expect(page.getByRole("region", { name: "저녁 식사" }).getByText("죽", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "오늘 기록 수정" })).toBeVisible();
+  await expect(page.getByRole("article", { name: `복용 중: ${MED_PUBLIC}` })).toBeVisible(); // 직접 추가한 약도 홈에
   await expect(page.getByText("(가상) 내부 검토 메모")).toHaveCount(0);
   await menu(page, "내 약").click();
   await expect(page.getByRole("region", { name: MED_PUBLIC })).toBeVisible();
@@ -254,12 +222,12 @@ test("4. 환자 A 재로그인: 처리 완료·식사 형태·약·질문 유지
   await page.context().close();
 });
 
-test("5. 보호자 G1: 처리 완료 상태 확인 / G3: 철회 후 같은 주소로 들어와도 데이터 없음", async ({ browser }) => {
+test("5. 보호자 G1: 공개 약 확인 / G3: 철회 후 같은 주소로 들어와도 데이터 없음", async ({ browser }) => {
   const p1 = await newPage(browser);
   await p1.goto("/login/member", { waitUntil: "networkidle" });
   await memberLoginForm(p1, G1);
   await expect(p1).toHaveURL(/\/guardian$/);
-  await expect(p1.getByRole("region", { name: "물 요청 처리 완료" })).toBeVisible();
+  await expect(p1.getByRole("region", { name: MED_PUBLIC })).toBeVisible();
   await p1.context().close();
 
   const p3 = await newPage(browser);
@@ -285,7 +253,7 @@ test("6. 차단: 미배정 간호사·초대 없는 보호자·철회된 보호�
     expect(data, `S2 ${t}`).toEqual([]);
   }
   const { data: reqA } = await (await userSession(A.email, A.password)).from("life_requests").select("id, status").eq("patient_id", A.pid).limit(1);
-  const adv = await s2.rpc("advance_request_status", { p_request_id: reqA![0].id, p_expected: "completed", p_to: "completed" });
+  const adv = await s2.rpc("advance_request_status", { p_request_id: reqA![0].id, p_expected: "received", p_to: "acknowledged" });
   expect(adv.error?.message ?? "").toMatch(/not_found/);
   const rev = await s2.rpc("add_staff_review", { p_patient_id: A.pid, p_action: "checked", p_note: "" });
   expect(rev.error?.message ?? "").toMatch(/forbidden/);
@@ -317,7 +285,7 @@ test("7. 환자 B: 아이디 로그인 후 자기 기록만, A·간호사1 화�
   await patientLogin(page, B);
   await expect(page.getByText(A.name)).toHaveCount(0);
   await menu(page, "내 약").click();
-  await expect(page.getByText("아직 등록한 약이 없어요.", { exact: false })).toBeVisible();
+  await expect(page.getByText("처방전 없이 따로 적어 둔 약이 없어요.")).toBeVisible();
   const sb = await userSession(B.email, B.password);
   for (const t of ["health_records", "medications", "life_requests", "visit_questions", "access_grants"]) {
     const { data } = await sb.from(t).select("*").eq("patient_id", A.pid);
