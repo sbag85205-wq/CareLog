@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 // Pretendard Variable (OFL-1.1) — 외부 CDN 없이 앱이 직접 제공, 쓰는 글자 묶음만 내려받음 (dynamic subset)
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "./globals.css";
+import { TrialBanner } from "@/components/patient-ui/TrialBanner";
 
 export const metadata: Metadata = {
   title: "CareLog · 내 약 복용 경험 기록 (프로토타입)",
@@ -17,7 +18,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ko" className="h-full antialiased">
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <TrialBanner />
+        {children}
+      </body>
     </html>
   );
 }

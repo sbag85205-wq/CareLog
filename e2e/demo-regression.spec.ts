@@ -49,6 +49,8 @@ test.describe("공개 데모 — 모바일", () => {
     await openApp(page);
     await expect(page.getByText("가상 데이터 데모", { exact: true })).toBeVisible();
     await expect(page.getByRole("tablist", { name: "데모 역할" }).getByRole("tab")).toHaveText(["나", "함께 보는 사람"]);
+    // 공개 체험 안내 띠는 carelog-public 에서만 (기존 배포·이 테스트 서버에는 없음)
+    await expect(page.getByRole("note", { name: "체험용 사이트 안내" })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: /그때 먹었던 약,\s*나한테 어땠더라\?/ })).toBeVisible();
     await expect(page.getByText("약 이름은 잊어도, 내 몸의 경험은 잊지 않도록.")).toBeVisible();
     await expect(page.getByRole("button", { name: "약 등록하기" })).toBeVisible();
