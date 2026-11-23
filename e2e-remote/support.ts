@@ -137,7 +137,7 @@ export async function patientLogin(page: Page, v: VPatient, password = v.passwor
   await typeSecret(page.getByLabel("비밀번호", { exact: true }), password);
   await page.getByRole("button", { name: "로그인", exact: true }).click();
   await expect(page).toHaveURL(/\/my$/);
-  await expect(page.getByText(`${v.name} 님의 약 기록`)).toBeVisible();
+  await expect(page.getByText(`${v.name} 님의 복약 경험 기록장`)).toBeVisible();
 }
 
 /** 보호자·의료진 로그인 폼 (이메일 + 비밀번호) */
@@ -155,23 +155,39 @@ export async function fillCondition(page: Page | Locator, score: number) {
   await page.getByRole("group", { name: "소화 상태" }).getByRole("button", { name: "좋음" }).click();
 }
 
-/** 새 홈: '오늘 컨디션 기록' 창을 열어 저장 */
+/** 컨디션 기록 화면 열기: 진료 준비 → '최근 2주 컨디션 요약' 펼치기 → 컨디션 기록 열기 (오늘 날짜가 선택됨) */
+export async function openConditionRecords(page: Page) {
+  await menu(page, "진료 준비").click();
+  const toggle = page.getByRole("button", { name: /^최근 2주 컨디션 요약/ });
+  if ((await toggle.getAttribute("aria-expanded")) === "false") await toggle.click();
+  await page.getByRole("button", { name: "컨디션 기록 열기" }).click();
+}
+
+/** 오늘 컨디션 기록 저장 */
 export async function recordCondition(page: Page, score: number) {
-  await page.getByRole("button", { name: /^오늘 (컨디션 기록|기록 수정)$/ }).click();
-  const dlg = page.getByRole("dialog", { name: "오늘 컨디션 기록" });
+  await openConditionRecords(page);
+  await page.getByRole("button", { name: /^이 날짜 (기록하기|의 기록 수정)$/ }).click();
+  const dlg = page.getByRole("dialog", { name: /기록 (작성|수정)$/ });
   await fillCondition(dlg, score);
   await dlg.getByRole("button", { name: /^기록 (저장|수정)$/ }).click();
   await expect(dlg).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "오늘 기록 수정" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "이 날짜의 기록 수정" })).toBeVisible();
 }
 
-/** 새 홈: 오늘 기록의 점수 확인 (창을 열어 보고 닫음) */
+/** 오늘 기록의 점수 확인 (창을 열어 보고 닫음) */
 export async function expectTodayCondition(page: Page, score: number) {
-  await page.getByRole("button", { name: "오늘 기록 수정" }).click();
-  const dlg = page.getByRole("dialog", { name: "오늘 컨디션 기록" });
+  await openConditionRecords(page);
+  await page.getByRole("button", { name: "이 날짜의 기록 수정" }).click();
+  const dlg = page.getByRole("dialog", { name: /기록 수정$/ });
   await expect(dlg.getByRole("group", { name: "오늘 컨디션" }).getByRole("button", { name: new RegExp(`^${score}점`) })).toHaveAttribute("aria-pressed", "true");
   await dlg.getByRole("button", { name: "닫기" }).click();
   await expect(dlg).toHaveCount(0);
+}
+
+/** 나의 약 기록 → '예전 방식으로 적어 둔 약'(직접 추가한 약 목록) 펼치기 */
+export async function openLegacyMeds(page: Page) {
+  await menu(page, "나의 약 기록").click();
+  await page.locator("details", { hasText: "예전 방식으로 적어 둔 약" }).evaluate((el) => ((el as HTMLDetailsElement).open = true));
 }
 
 export const menu = (page: Page, name: string) => page.getByRole("navigation", { name: "메뉴" }).getByRole("button", { name, exact: true });

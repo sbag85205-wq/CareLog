@@ -110,7 +110,8 @@ async function resolveAndRegister(page: Page) {
   const button = dlg.getByRole("button", { name: /선택한 약 \d+개 한 번에 등록/ });
   const count = Number((await button.textContent())!.match(/(\d+)개/)![1]);
   await button.click();
-  await expect(dlg.getByText(`약 ${count}개를 등록했어요`)).toBeVisible();
+  // 저장하면 등록 창이 닫히고 나의 약 기록에 안내가 보임
+  await expect(page.getByText(new RegExp(`약 ${count}개를 (내 약 목록에 )?등록했어요`)).first()).toBeVisible();
   return count;
 }
 
@@ -135,7 +136,7 @@ test("텍스트 PDF(파일 선택): 글자 추출 → 약 5개 → 확인됨·�
   const button = dlg.getByRole("button", { name: "선택한 약 5개 한 번에 등록" });
   await button.click();
   await button.click({ force: true, timeout: 1000 }).catch(() => {}); // 연타
-  await expect(dlg.getByText("처방 1건 · 약 5개를 등록했어요")).toBeVisible();
+  await expect(page.getByText(/처방 1건 · 약 5개를 등록했어요|처방전에서 약 5개를 내 약 목록에 등록했어요/).first()).toBeVisible();
 
   const rxMode = await rxTablesReady(P1);
   if (rxMode) {
@@ -210,8 +211,7 @@ test("스캔 PDF(이미지뿐) → 이미지로 OCR / 사진 파일 선택(PC) �
   await dlg.getByLabel("처방전 사진·PDF 파일 선택").setInputFiles({ name: "스캔처방전.pdf", mimeType: "application/pdf", buffer: files.scanPdf });
   await expect(dlg.getByText(/스캔 PDF를 이미지로 읽었어요 · 약 \d+개/)).toBeVisible({ timeout: 180_000 });
   expect(await dlg.getByRole("list", { name: "처방전에서 읽은 약" }).getByRole("listitem").count()).toBeGreaterThanOrEqual(3);
-  const n = await resolveAndRegister(page);
-  await dlg.getByRole("button", { name: "닫기" }).click();
+  const n = await resolveAndRegister(page); // 저장하면 등록 창은 저절로 닫힘
 
   dlg = await openImport(page);
   await dlg.getByLabel("처방전 사진·PDF 파일 선택").setInputFiles({ name: "사진.png", mimeType: "image/png", buffer: files.png });
@@ -234,7 +234,7 @@ test("검색 실패(실제 서버 경로, 키 없음) → 직접 입력 → 일�
   await dlg.getByRole("button", { name: "약 직접 추가" }).click();
   await dlg.getByRole("list", { name: "처방전에서 읽은 약" }).getByRole("listitem").last().getByLabel("약 이름").fill("(가상) 직접 추가한 약");
   await dlg.getByRole("button", { name: "선택한 약 6개 한 번에 등록" }).click();
-  await expect(dlg.getByText("약 6개를 등록했어요")).toBeVisible();
+  await expect(page.getByText(/약 6개를 (내 약 목록에 )?등록했어요/).first()).toBeVisible();
   if (await rxTablesReady(P4)) {
     const rows = await rxItems(P4);
     expect(rows).toHaveLength(6);

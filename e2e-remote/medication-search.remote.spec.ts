@@ -7,7 +7,7 @@
  * - 검색어는 요청 본문으로만 보내고 주소에는 남기지 않는지 확인
  */
 import { expect, test, type Browser, type Page, type Route } from "@playwright/test";
-import { cleanup, patientLogin, provisionMember, provisionPatient, userSession, menu, type VMember, type VPatient } from "./support";
+import { cleanup, patientLogin, provisionMember, provisionPatient, userSession, type VMember, type VPatient, openLegacyMeds } from "./support";
 
 let P: VPatient;
 let G: VMember;
@@ -44,7 +44,7 @@ async function newPage(browser: Browser): Promise<Page> {
 }
 
 async function openAdd(page: Page) {
-  await menu(page, "나의 약 기록").click();
+  await openLegacyMeds(page);
   await page.getByRole("button", { name: "약 직접 추가" }).click();
   return page.getByRole("dialog");
 }

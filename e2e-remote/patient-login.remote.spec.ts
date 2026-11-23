@@ -22,6 +22,7 @@ import {
   provisionLegacyPatient,
   provisionMember,
   provisionPatient,
+  openLegacyMeds,
   recordCondition,
   randLoginId,
   randPassword,
@@ -181,13 +182,13 @@ test("3. 이전 방식 환자 전환: 아이디 지정 → 새 아이디 + 기�
   const page = await newPage(browser);
   await patientLogin(page, L); // 새 아이디 + 기존 비밀번호
   await expectTodayCondition(page, 4);
-  await menu(page, "나의 약 기록").click();
+  await openLegacyMeds(page); // 예전 방식 약은 '예전 방식으로 적어 둔 약'에 그대로
   await expect(page.getByRole("region", { name: LEGACY_MED })).toBeVisible();
   await menu(page, "진료 준비").click();
-  await expect(page.getByText(LEGACY_Q)).toBeVisible();
+  await expect(page.getByRole("list", { name: "진료 질문 목록" }).getByText(LEGACY_Q)).toBeVisible();
   await menu(page, "함께 보기").click();
   await page.getByText("사람 초대 · 연결 관리").click(); // 초대·공유 범위는 접힌 영역 안
-  await expect(page.getByText(G.email)).toBeVisible();
+  await expect(page.getByText(G.email).first()).toBeVisible();
   await page.context().close();
 
   // 보호자·간호사는 기존 계정(/login/member)으로 그대로 확인

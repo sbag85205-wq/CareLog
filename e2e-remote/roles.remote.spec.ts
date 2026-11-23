@@ -14,7 +14,6 @@ import {
   assignStaff,
   cleanup,
   expectNoHorizontalOverflow,
-  fillCondition,
   memberLoginForm,
   menu,
   patientLogin,
@@ -24,6 +23,9 @@ import {
   userSession,
   type VMember,
   type VPatient,
+  expectTodayCondition,
+  openLegacyMeds,
+  recordCondition,
 } from "./support";
 
 let A: VPatient, B: VPatient;
@@ -67,15 +69,10 @@ test("1. 환자 A: 지금 복용 중 홈 → 오늘 기록 → 내 약 → 진�
   await expect(page.getByText("오늘의 식사")).toHaveCount(0);
 
   // 오늘의 컨디션 (홈에서 열기)
-  await page.getByRole("button", { name: "오늘 컨디션 기록" }).click();
-  const cond = page.getByRole("dialog", { name: "오늘 컨디션 기록" });
-  await fillCondition(cond, 4);
-  await cond.getByRole("button", { name: "기록 저장" }).click();
-  await expect(cond).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "오늘 기록 수정" })).toBeVisible();
+  await recordCondition(page, 4);
 
   // 내 약: 추가(공개·비공개) → 수정
-  await menu(page, "나의 약 기록").click();
+  await openLegacyMeds(page);
   for (const [name, pub] of [
     [MED_PUBLIC, true],
     [MED_PRIVATE, false],
@@ -203,8 +200,8 @@ test("3. 담당 간호사 S1: 담당 환자·공유 질문·검토 저장 (생�
 test("4. 환자 A 재로그인: 기록·약·질문 유지, 검토 메모는 안 보임 → G3 공유 철회", async ({ browser }) => {
   const page = await newPage(browser);
   await patientLogin(page, A);
-  await expect(page.getByRole("button", { name: "오늘 기록 수정" })).toBeVisible();
-  await expect(page.getByRole("article", { name: `복용 중: ${MED_PUBLIC}` })).toBeVisible(); // 직접 추가한 약도 홈에
+  await expect(page.getByLabel(`복용 중: ${MED_PUBLIC}`)).toBeVisible(); // 직접 추가한 약도 홈에
+  await expectTodayCondition(page, 4);
   await expect(page.getByText("(가상) 내부 검토 메모")).toHaveCount(0);
   await menu(page, "나의 약 기록").click();
   await expect(page.getByRole("region", { name: MED_PUBLIC })).toBeVisible();
