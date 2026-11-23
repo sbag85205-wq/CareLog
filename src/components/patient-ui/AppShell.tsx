@@ -23,6 +23,7 @@ export function AppShell<T extends string>({
   roleLabel,
   userLabel,
   onLogout,
+  logoutLabel = "로그아웃",
   topBar,
   sideNote,
   loadState,
@@ -37,6 +38,8 @@ export function AppShell<T extends string>({
   userLabel?: string;
   /** 없으면 로그아웃 버튼을 숨김 (공개 데모) */
   onLogout?: () => void;
+  /** 로그아웃 버튼 문구 (공개 체험: '체험 끝내기') */
+  logoutLabel?: string;
   /** 화면 맨 위 띠 (공개 데모: 가상 데이터 표시·역할 전환) */
   topBar?: ReactNode;
   /** 화면 아래쪽 안내 문구 (데이터 출처·주의) */
@@ -66,7 +69,7 @@ export function AppShell<T extends string>({
             </p>
             {onLogout && (
               <PButton variant="ghost" size="sm" icon={LogOut} onClick={onLogout}>
-                로그아웃
+                {logoutLabel}
               </PButton>
             )}
           </div>

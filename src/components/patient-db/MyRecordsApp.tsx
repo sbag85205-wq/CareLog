@@ -14,6 +14,7 @@ import { RxHome } from "@/components/rx/RxHome";
 import { TogetherView } from "@/components/rx/TogetherView";
 import { Alert, cn, PButton, PCard, Segmented, SoftSheet, StatusPill, TextField } from "@/components/patient-ui/kit";
 import { CONDITION_WORD, SLEEP_WORD } from "@/components/patient-ui/labels";
+import { TrialBar, TrialEndSheet, TrialExpired, useTrialSession } from "@/components/trial/TrialSession";
 import { RepositoryProvider } from "@/hooks/repository-context";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
 import { useDbApp } from "@/hooks/useDbApp";
@@ -41,6 +42,9 @@ export const PATIENT_TABS: ShellTab<Tab>[] = [
 export function MyRecordsApp() {
   const { repo, snapshot, loadState, ready, logout } = useDbApp("patient");
   const [tab, setTab] = useState<Tab>("home");
+  // 로그인 없는 공개 체험 세션인지 (익명 세션 + trial_status)
+  const trial = useTrialSession(ready);
+  const [endOpen, setEndOpen] = useState(false);
   const patient = snapshot?.patients[0];
   // 처방 이력 (본인 세션 → RLS). migration 10 이 없는 DB에서는 '준비 중'으로 알리고 기존 기능 유지
   const rxStore = useMemo(() => (ready ? createSupabaseRxStore(getBrowserClient()!) : null), [ready]);
@@ -53,20 +57,25 @@ export function MyRecordsApp() {
       tabs={PATIENT_TABS}
       active={tab}
       onTab={setTab}
-      roleLabel="가상 환자"
+      roleLabel={trial.active ? "체험 방문자" : "가상 환자"}
       userLabel={patient?.name}
-      onLogout={() => void logout()}
+      onLogout={trial.active ? () => setEndOpen(true) : () => void logout()}
+      logoutLabel={trial.active ? "체험 끝내기" : undefined}
+      topBar={trial.active && trial.expiresAt ? <TrialBar expiresAt={trial.expiresAt} onEnd={() => setEndOpen(true)} /> : undefined}
       loadState={loadState}
       onRetry={() => void repo?.load()}
       ready={ready && Boolean(patient)}
     >
-      {ready && patient && repo && snapshot && (
+      {trial.expired ? (
+        <TrialExpired />
+      ) : ready && patient && repo && snapshot && (
         <RepositoryProvider value={repo}>
           <RxStoreProvider value={rxStore}>
             <PatientTabs tab={tab} setTab={setTab} snapshot={snapshot} patient={patient} repo={repo} />
           </RxStoreProvider>
         </RepositoryProvider>
       )}
+      <TrialEndSheet open={endOpen} onClose={() => setEndOpen(false)} />
     </AppShell>
   );
 }

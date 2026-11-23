@@ -267,7 +267,7 @@ describe("비밀번호 설정 전 차단과 계정 연결 보호", () => {
        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
        where n.nspname = 'public' and p.proname like 'svc\\_%'`,
     );
-    expect(rows).toHaveLength(8); // migration 7의 7개 + migration 9 svc_mark_password_set
+    expect(rows).toHaveLength(10); // migration 7의 7개 + 9 svc_mark_password_set + 12 체험 정리 2개 (svc_purge_expired_trials·svc_trial_users_to_delete)
     for (const r of rows) {
       expect(r).toMatchObject({ anon: false, auth: false, svc: true });
       expect(r.cfg).toEqual(expect.arrayContaining([expect.stringMatching(/^search_path=("")?$/)]));

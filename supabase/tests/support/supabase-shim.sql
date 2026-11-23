@@ -29,6 +29,7 @@ create table auth.users (
   email_confirmed_at timestamptz,
   raw_user_meta_data jsonb not null default '{}'::jsonb,
   raw_app_meta_data  jsonb not null default '{}'::jsonb,
+  is_anonymous       boolean not null default false,  -- Supabase Anonymous sign-ins
   created_at         timestamptz not null default now()
 );
 grant all on auth.users to supabase_auth_admin, service_role;

@@ -32,7 +32,7 @@ export async function createTestDb(opts: { migrations?: boolean } = {}): Promise
   return db;
 }
 
-export type Actor = { id: string; email?: string } | "anon" | "service_role" | "superuser";
+export type Actor = { id: string; email?: string; anonymous?: boolean } | "anon" | "service_role" | "superuser";
 
 /**
  * 지정한 사용자로 SQL 실행 (트랜잭션 단위, 끝나면 원래 역할로 복귀)
@@ -54,7 +54,7 @@ export async function as<T = Record<string, unknown>>(
     } else if (actor !== "superuser") {
       await tx.query("set local role authenticated");
       await tx.query("select set_config('request.jwt.claims', $1, true)", [
-        JSON.stringify({ sub: actor.id, role: "authenticated", email: actor.email }),
+        JSON.stringify({ sub: actor.id, role: "authenticated", email: actor.email, ...(actor.anonymous && { is_anonymous: true }) }),
       ]);
     }
     const res = await tx.query<T>(sql, params);
@@ -86,4 +86,10 @@ export async function signUp(
     [email, opts.confirmed ?? true, JSON.stringify(opts.meta ?? {})],
   );
   return { id: rows[0].id, email };
+}
+
+/** Supabase 익명 로그인(signInAnonymously)과 같은 계정 — 이메일 없음, is_anonymous = true, JWT에 is_anonymous */
+export async function signInAnonymously(db: PGlite): Promise<{ id: string; anonymous: true }> {
+  const rows = await as<{ id: string }>(db, "superuser", "insert into auth.users (is_anonymous) values (true) returning id");
+  return { id: rows[0].id, anonymous: true };
 }

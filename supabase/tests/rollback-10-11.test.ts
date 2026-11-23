@@ -44,7 +44,7 @@ const dataHash = async (db: PGlite) =>
 describe("되돌리기 11 → 10", () => {
   it("1–9 구조와 같아지고, 1–9 시절 데이터는 그대로 (10·11 이후 기록만 사라짐)", async () => {
     const db = await createTestDb({ migrations: false });
-    const base = migrationFiles().filter((f) => !NEW.includes(f));
+    const base = migrationFiles().filter((f) => f < NEW[0]); // 1–9 (12 이후는 이 되돌리기와 무관)
     expect(base).toHaveLength(9);
     await apply(db, base);
 

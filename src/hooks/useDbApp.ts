@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { isTrialSite } from "@/lib/trial";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { createSupabaseRepository, type SupabaseRepository } from "@/lib/repository/supabase";
 import { ROLE_HOME, type AppRole } from "@/lib/roles";
@@ -27,7 +28,8 @@ export function useDbApp(expected: AppRole | null, opts: { requireLogin?: boolea
       const user = client ? (await client.auth.getUser()).data.user : null;
       if (cancelled) return;
       if (!client || !user) {
-        if (requireLogin) router.replace("/login");
+        // 공개 체험 사이트의 환자 화면: 로그인 대신 구름이 소개·체험 시작으로
+        if (requireLogin) router.replace(expected === "patient" && isTrialSite() ? "/start" : "/login");
         else setSignedOut(true);
         return;
       }
@@ -39,7 +41,7 @@ export function useDbApp(expected: AppRole | null, opts: { requireLogin?: boolea
     return () => {
       cancelled = true;
     };
-  }, [router, requireLogin]);
+  }, [router, requireLogin, expected]);
 
   useEffect(() => start(), [start]);
 

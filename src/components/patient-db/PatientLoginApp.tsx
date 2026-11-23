@@ -1,6 +1,7 @@
 "use client";
 
 import { Check } from "lucide-react";
+import { isTrialSite } from "@/lib/trial";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -135,6 +136,14 @@ export function PatientLoginApp() {
                   보호자·의료진 로그인
                 </Link>
               </p>
+              {isTrialSite() && (
+                <p>
+                  아이디가 없나요?{" "}
+                  <Link href="/start" className="font-semibold text-brand-700 underline underline-offset-4">
+                    로그인 없이 체험하기
+                  </Link>
+                </p>
+              )}
               <p>
                 로그인 없이 둘러보기:{" "}
                 <Link href="/demo" className="font-semibold text-brand-700 underline underline-offset-4">
