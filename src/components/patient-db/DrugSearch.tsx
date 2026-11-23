@@ -58,7 +58,7 @@ export function DrugSearch({ onSelect }: { onSelect: (item: DrugItem) => void })
             }
           }}
           placeholder="예: 타이레놀"
-          className="h-12 min-w-0 flex-1 rounded-2xl border border-line bg-white px-4 text-base text-ink outline-none focus:border-sage-500 focus:ring-4 focus:ring-sage-100"
+          className="h-12 min-w-0 flex-1 rounded-2xl border border-line bg-white px-4 text-base text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
         />
         <PButton size="md" icon={Search} className="!min-h-12 shrink-0" onClick={() => void runSearch()} disabled={pending}>
           {pending ? "검색 중…" : "검색"}

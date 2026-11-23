@@ -71,7 +71,7 @@ export function ItemDetail({
               onClick={() => run(() => store.updateItem(item.id, { starred: !item.starred }))}
               className={cn(
                 "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border",
-                item.starred ? "border-sage-300 bg-sage-100 text-sage-800" : "border-line bg-white text-ink-soft",
+                item.starred ? "border-brand-300 bg-brand-100 text-brand-800" : "border-line bg-white text-ink-soft",
               )}
             >
               <Star className="h-5 w-5" fill={item.starred ? "currentColor" : "none"} aria-hidden />
@@ -129,7 +129,7 @@ export function ItemDetail({
               <button
                 type="button"
                 onClick={() => onOpenRecord(prescription.id)}
-                className="flex w-full flex-wrap items-center gap-2 rounded-2xl border border-line bg-white px-4 py-3 text-left hover:border-sage-300"
+                className="flex w-full flex-wrap items-center gap-2 rounded-2xl border border-line bg-white px-4 py-3 text-left hover:border-brand-300"
               >
                 <KindPill p={prescription} />
                 <span className="font-semibold text-ink">{prescriptionLabel(prescription, itemsOf(snapshot, prescription.id).length)}</span>
@@ -150,7 +150,7 @@ export function ItemDetail({
           <ol className="space-y-2" aria-label="복용 경험 타임라인">
             {timeline.map(({ note: n, wholeRecord, prescription }) => (
               <li key={n.id} className="rounded-2xl border border-line bg-white p-4">
-                <p className="text-sm font-bold text-sage-800">{dotDate(n.takenOn ?? n.createdAt)}</p>
+                <p className="text-sm font-bold text-brand-800">{dotDate(n.takenOn ?? n.createdAt)}</p>
                 {wholeRecord && (
                   <p className="mt-0.5 text-xs font-semibold text-blush-700">
                     {prescription.kind === "otc" ? "이 등록 전체" : "함께 먹은 약 전체"}에 남긴 기록 — 이 약 때문인지는 확인되지 않아요

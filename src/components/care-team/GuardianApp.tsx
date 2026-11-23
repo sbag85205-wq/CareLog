@@ -179,7 +179,7 @@ function LatestCheckIn({ records, today }: { records: HealthRecord[]; today: str
 function CheckInBody({ r }: { r: HealthRecord }) {
   return (
     <div className="mt-3">
-      <p className="text-[1.6rem] font-extrabold text-sage-700">{CONDITION_WORD[r.condition]}</p>
+      <p className="text-[1.6rem] font-extrabold text-brand-700">{CONDITION_WORD[r.condition]}</p>
       <p className="mt-1 text-sm font-bold text-ink">
         통증 {r.pain}점 · 피로 {r.fatigue}점 · 수면 {SLEEP_WORD[r.sleep]}
         {r.symptoms.length > 0 && ` · ${r.symptoms.join(", ")}`}

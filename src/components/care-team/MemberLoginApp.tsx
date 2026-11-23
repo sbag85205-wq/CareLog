@@ -22,7 +22,7 @@ export function MemberLoginApp() {
       <main className="mx-auto w-full max-w-md px-5 pt-8 pb-10 lg:pt-16">
         <PCard className="!p-0 lg:!p-10 max-lg:!border-0 max-lg:!bg-transparent">
           <div className="relative">
-            <Wordmark sub="(가칭)" />
+            <Wordmark />
             <h1 className="mt-10 text-[1.85rem] leading-snug font-extrabold tracking-tight text-ink">
               보호자·의료진·관리자
               <br />
@@ -37,7 +37,7 @@ export function MemberLoginApp() {
           <div className="mt-8 space-y-2 text-center text-sm text-ink-soft">
             <p>
               환자이신가요?{" "}
-              <Link href="/login" className="font-semibold text-sage-700 underline underline-offset-4">
+              <Link href="/login" className="font-semibold text-brand-700 underline underline-offset-4">
                 아이디로 로그인
               </Link>
             </p>

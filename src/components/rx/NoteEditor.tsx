@@ -11,7 +11,7 @@ import type { RxStore } from "@/lib/rx/store";
 import { TagPills } from "./RxParts";
 
 const toggle = (list: string[], t: string) => (list.includes(t) ? list.filter((x) => x !== t) : [...list, t]);
-const GROUP_TONE: Record<TagGroup, string> = { good: "text-sage-800", after: "text-blush-700", process: "text-blush-700", note: "text-ink-soft" };
+const GROUP_TONE: Record<TagGroup, string> = { good: "text-brand-800", after: "text-blush-700", process: "text-blush-700", note: "text-ink-soft" };
 
 /** 태그 고르기 — 도움이 된 점 · 복용 후 느낀 불편함 · 복용 과정의 불편함 (여러 개, 함께 선택 가능) */
 export function TagPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
@@ -81,8 +81,8 @@ function SuggestBox({
   const suggested = useMemo(() => suggestTags(memo), [memo]);
   if (!memo.trim()) return null;
   return (
-    <div className="rounded-2xl border border-dashed border-sage-300 bg-sage-50 p-3" aria-label="자동 정리 제안">
-      <p className="flex items-center gap-1.5 text-sm font-bold text-sage-800">
+    <div className="rounded-2xl border border-dashed border-brand-300 bg-brand-50 p-3" aria-label="자동 정리 제안">
+      <p className="flex items-center gap-1.5 text-sm font-bold text-brand-800">
         <Sparkles className="h-4 w-4" aria-hidden /> 자동 정리 제안
       </p>
       <p className="text-xs text-ink-soft">메모의 말을 규칙으로 읽어 태그를 제안해요 (이 기기 안에서만 · 외부 AI 사용 안 함). 제안은 확인 후 고칠 수 있어요.</p>
@@ -173,7 +173,7 @@ export function NoteEditor({
       <TagPicker value={tags} onChange={setTags} />
       {accepted && (
         <label className="block">
-          <span className="mb-1 block text-xs font-bold text-sage-800">자동 정리한 요약 (규칙 기반 · 고칠 수 있어요)</span>
+          <span className="mb-1 block text-xs font-bold text-brand-800">자동 정리한 요약 (규칙 기반 · 고칠 수 있어요)</span>
           <textarea
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
@@ -245,7 +245,7 @@ export function NoteCard({
   return (
     <PCard className="!p-4" aria-label={`복용 경험: ${targetName}`}>
       <p className="text-xs text-ink-soft">
-        <span className="font-bold text-sage-800">환자가 직접 남긴 경험</span> · {targetName}
+        <span className="font-bold text-brand-800">환자가 직접 남긴 경험</span> · {targetName}
         {n.takenOn && ` · 복용한 날 ${dotDate(n.takenOn)}`} · 작성 {formatDateTime(n.createdAt)}
         {edited && ` · 수정 ${formatDateTime(n.updatedAt)}`}
       </p>
@@ -265,7 +265,7 @@ export function NoteCard({
           <TextArea label="느낀 점 (원본 메모)" value={memo} onChange={(e) => setMemo(e.target.value)} rows={2} maxLength={1000} counter />
           {(n.summary || n.summarySource) && (
             <label className="block">
-              <span className="mb-1 block text-xs font-bold text-sage-800">자동 정리한 요약 (지우려면 비워 두세요)</span>
+              <span className="mb-1 block text-xs font-bold text-brand-800">자동 정리한 요약 (지우려면 비워 두세요)</span>
               <textarea
                 value={summary}
                 onChange={(e) => setSummary(e.target.value)}
@@ -313,8 +313,8 @@ export function NoteCard({
             </div>
           )}
           {n.summary && (
-            <div className="mt-2 rounded-xl bg-sage-50 px-3 py-2" aria-label="자동 정리">
-              <p className="flex items-center gap-1 text-[0.7rem] font-bold text-sage-800">
+            <div className="mt-2 rounded-xl bg-brand-50 px-3 py-2" aria-label="자동 정리">
+              <p className="flex items-center gap-1 text-[0.7rem] font-bold text-brand-800">
                 <Sparkles className="h-3.5 w-3.5" aria-hidden /> 자동 정리 ({n.summarySource === "ai" ? "AI" : "규칙 기반"}) · 원본 메모는 그대로 보관
               </p>
               <p className="text-sm text-ink">{n.summary}</p>

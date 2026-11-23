@@ -146,7 +146,7 @@ function MealCard({
   return (
     <PCard aria-label={`${label} 식사`}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-bold text-sage-800">
+        <p className="text-sm font-bold text-brand-800">
           {label} · {SLOT_TIME[slot]}
         </p>
         <span className="flex flex-wrap justify-end gap-1">
@@ -324,7 +324,7 @@ export function RequestCard({ request: r, patientName, action }: { request: Life
     <PCard className="!p-4 sm:!p-5" aria-label={`${REQUEST_CATEGORY_LABEL[r.category]} ${REQUEST_STATUS_LABEL[r.status]}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-bold text-sage-800">
+          <p className="text-sm font-bold text-brand-800">
             {patientName && <span className="text-ink">{patientName} · </span>}
             {REQUEST_CATEGORY_LABEL[r.category]}
           </p>

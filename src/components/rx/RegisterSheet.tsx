@@ -139,11 +139,11 @@ export function RegisterSheet({
                   type="button"
                   onClick={() => go(m)}
                   className={cn(
-                    "flex min-h-16 w-full items-center gap-3 rounded-[1.25rem] border bg-white px-4 py-3 text-left transition hover:border-sage-300",
+                    "flex min-h-16 w-full items-center gap-3 rounded-[1.25rem] border bg-white px-4 py-3 text-left transition hover:border-brand-300",
                     m === "barcode" ? "border-dashed border-line opacity-80" : "border-line",
                   )}
                 >
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-sage-100 text-sage-800">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-100 text-brand-800">
                     <Icon className="h-6 w-6" aria-hidden />
                   </span>
                   <span className="min-w-0">

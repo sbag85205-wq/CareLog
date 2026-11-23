@@ -377,10 +377,10 @@ export function PrescriptionImport({
   if (stage === "done") {
     return (
       <PCard tone="tint">
-        <p className="flex items-center gap-2 text-lg font-bold text-sage-900">
+        <p className="flex items-center gap-2 text-lg font-bold text-brand-900">
           <CheckCircle2 className="h-6 w-6" aria-hidden /> 처방 1건 · 약 {selected.length}개를 등록했어요
         </p>
-        <p className="mt-1 text-sm text-sage-800">지금 복용 중과 처방 이력에서 확인할 수 있어요.</p>
+        <p className="mt-1 text-sm text-brand-800">지금 복용 중과 처방 이력에서 확인할 수 있어요.</p>
       </PCard>
     );
   }
@@ -400,7 +400,7 @@ export function PrescriptionImport({
               type="date"
               value={meta.prescribedOn}
               onChange={(e) => setMeta({ ...meta, prescribedOn: e.target.value })}
-              className="h-11 w-full rounded-xl border border-line bg-white px-3 text-[0.95rem] text-ink outline-none focus:border-sage-500 focus:ring-4 focus:ring-sage-100"
+              className="h-11 w-full rounded-xl border border-line bg-white px-3 text-[0.95rem] text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
             />
             {!metaRead.date && <span className="mt-1 block text-xs text-blush-700">처방전에서 날짜를 읽지 못했어요. 확인해서 입력해 주세요.</span>}
           </label>
@@ -409,7 +409,7 @@ export function PrescriptionImport({
             <select
               value={meta.department}
               onChange={(e) => setMeta({ ...meta, department: e.target.value })}
-              className="h-11 w-full rounded-xl border border-line bg-white px-3 text-[0.95rem] text-ink outline-none focus:border-sage-500 focus:ring-4 focus:ring-sage-100"
+              className="h-11 w-full rounded-xl border border-line bg-white px-3 text-[0.95rem] text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
             >
               <option value="">선택 안 함</option>
               {DEPARTMENTS.map((d) => (
@@ -440,7 +440,7 @@ export function PrescriptionImport({
               rows={2}
               maxLength={1000}
               placeholder="처방전·복약 안내에 적힌 주의사항 (없으면 비워 두세요)"
-              className="w-full rounded-xl border border-line bg-white px-3 py-2 text-[0.95rem] text-ink outline-none focus:border-sage-500 focus:ring-4 focus:ring-sage-100"
+              className="w-full rounded-xl border border-line bg-white px-3 py-2 text-[0.95rem] text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
             />
           </label>
         </div>
@@ -536,7 +536,7 @@ function RowCard({
         <label className="flex min-w-0 items-start gap-2">
           <input
             type="checkbox"
-            className="mt-1 h-5 w-5 shrink-0 accent-sage-700"
+            className="mt-1 h-5 w-5 shrink-0 accent-brand-700"
             checked={r.include}
             onChange={(e) => onChange({ include: e.target.checked })}
             aria-label={`${title} 등록`}
@@ -558,13 +558,13 @@ function RowCard({
               key={`${c.item.itemSeq}-${c.item.company}`}
               className={cn(
                 "flex cursor-pointer items-start gap-2 rounded-2xl border p-3",
-                r.pick === c.item.itemSeq ? "border-sage-500 bg-sage-50" : "border-line bg-white",
+                r.pick === c.item.itemSeq ? "border-brand-500 bg-brand-50" : "border-line bg-white",
               )}
             >
               <input
                 type="radio"
                 name={`pick-${r.key}`}
-                className="mt-1 accent-sage-700"
+                className="mt-1 accent-brand-700"
                 checked={r.pick === c.item.itemSeq}
                 onChange={() => {
                   onChange((cur) => ({
@@ -594,13 +594,13 @@ function RowCard({
           <label
             className={cn(
               "flex cursor-pointer items-center gap-2 rounded-2xl border p-3 text-sm",
-              r.pick === null ? "border-sage-500 bg-sage-50" : "border-line bg-white",
+              r.pick === null ? "border-brand-500 bg-brand-50" : "border-line bg-white",
             )}
           >
             <input
               type="radio"
               name={`pick-${r.key}`}
-              className="accent-sage-700"
+              className="accent-brand-700"
               checked={r.pick === null}
               onChange={() => {
                 onChange({ pick: null });
@@ -666,7 +666,7 @@ function MiniField({
         onChange={onChange}
         maxLength={100}
         placeholder={placeholder ?? "처방전에 없으면 비워 두세요"}
-        className="h-11 w-full rounded-xl border border-line bg-white px-3 text-[0.95rem] text-ink outline-none placeholder:text-ink-soft/50 focus:border-sage-500 focus:ring-4 focus:ring-sage-100"
+        className="h-11 w-full rounded-xl border border-line bg-white px-3 text-[0.95rem] text-ink outline-none placeholder:text-ink-soft/50 focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
       />
     </label>
   );
@@ -677,7 +677,7 @@ function ProgressBar({ p }: { p: ReadProgress }) {
   const pct = Math.round(Math.max(0, Math.min(1, p.ratio)) * 100);
   return (
     <div aria-live="polite">
-      <p className="text-sm font-semibold text-sage-800">
+      <p className="text-sm font-semibold text-brand-800">
         {label}… {pct}%
       </p>
       <div
@@ -688,7 +688,7 @@ function ProgressBar({ p }: { p: ReadProgress }) {
         aria-valuemax={100}
         aria-label={label}
       >
-        <div className="h-full rounded-full bg-sage-700 transition-all" style={{ width: `${pct}%` }} />
+        <div className="h-full rounded-full bg-brand-700 transition-all" style={{ width: `${pct}%` }} />
       </div>
     </div>
   );

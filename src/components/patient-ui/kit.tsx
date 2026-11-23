@@ -1,13 +1,15 @@
 "use client";
 
 /**
- * 환자 화면(/login, /my) 공통 디자인 컴포넌트 — 따뜻한 아이보리 + 파스텔 세이지
- * 버튼·입력창·선택 버튼·상태 표시는 이 파일의 컴포넌트만 사용합니다.
+ * 환자 화면(/login, /my, /demo) 공통 디자인 컴포넌트 — CareLog Design System v2 · Soft Glass
+ * 블루 CTA 하나 + 민트·세이지 보조 + 라벤더·피치·버터 상태색. 색 토큰은 app/globals.css.
+ * 버튼·입력창·탭·필터 칩·카드·상태 표시는 이 파일의 컴포넌트만 사용합니다.
  * (기존 데모 화면은 components/ui/primitives.tsx 를 그대로 사용)
  */
 import { ArrowRight, Check, type LucideIcon } from "lucide-react";
 import { useId, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from "react";
 import { cn } from "@/components/ui/primitives";
+import { CloudMascot, LogoMark } from "@/components/patient-ui/illustrations";
 import { BRAND } from "@/lib/brand";
 
 export { cn };
@@ -16,8 +18,9 @@ export { cn };
 
 export function Wordmark({ sub, className }: { sub?: string; className?: string }) {
   return (
-    <div className={cn("flex items-baseline gap-2", className)}>
-      <span className="text-[1.65rem] font-extrabold tracking-tight text-sage-700">{BRAND.name}</span>
+    <div className={cn("flex items-center gap-2", className)}>
+      <LogoMark className="h-9 w-9 shrink-0" />
+      <span className="text-[1.4rem] font-extrabold tracking-tight text-ink">{BRAND.name}</span>
       {sub && <span className="text-sm text-ink-soft">{sub}</span>}
     </div>
   );
@@ -31,7 +34,8 @@ export function PCard({
   ...rest
 }: {
   children: ReactNode;
-  tone?: "white" | "tint" | "ivory";
+  /** white: 기본 흰 카드 · tint: 연한 블루 강조 · ivory: 보조 면 · mint/lavender: 강조 카드(화면당 1개) · glass: 유리 */
+  tone?: "white" | "tint" | "ivory" | "mint" | "lavender" | "glass";
   className?: string;
   as?: "section" | "div" | "article";
 } & { "aria-label"?: string; "aria-labelledby"?: string }) {
@@ -39,10 +43,13 @@ export function PCard({
     <Tag
       {...rest}
       className={cn(
-        "rounded-[1.75rem] p-5 sm:p-6",
-        tone === "white" && "border border-line bg-white",
-        tone === "tint" && "bg-sage-100",
-        tone === "ivory" && "bg-ivory-deep",
+        "rounded-[1.25rem] p-5 sm:p-6",
+        tone === "white" && "border border-line bg-white shadow-soft",
+        tone === "tint" && "border border-brand-100 bg-brand-50",
+        tone === "ivory" && "border border-line/70 bg-ivory-deep/60",
+        tone === "mint" && "border border-mint-200/70 bg-gradient-to-br from-mint-50 to-mint-100/80 shadow-soft",
+        tone === "lavender" && "border border-lavender-100 bg-gradient-to-br from-lavender-50 to-lavender-100/70 shadow-soft",
+        tone === "glass" && "glass",
         className,
       )}
     >
@@ -95,14 +102,15 @@ export function PButton({
       type={type}
       {...rest}
       className={cn(
-        "inline-flex items-center justify-center gap-2 font-bold transition disabled:cursor-not-allowed",
-        size === "lg" && "min-h-14 rounded-[1.25rem] px-6 text-[1.05rem]",
-        size === "md" && "min-h-12 rounded-2xl px-5 text-base",
+        "inline-flex items-center justify-center gap-2 font-bold transition duration-150 disabled:cursor-not-allowed",
+        size === "lg" && "min-h-[3.25rem] rounded-[0.875rem] px-6 text-[1.05rem]",
+        size === "md" && "min-h-12 rounded-[0.875rem] px-5 text-base",
         size === "sm" && "min-h-10 shrink-0 rounded-xl px-3.5 text-sm whitespace-nowrap",
-        variant === "primary" && "bg-sage-700 text-white hover:bg-sage-800 disabled:bg-sage-300",
+        variant === "primary" &&
+          "bg-brand-700 text-white shadow-cta hover:bg-brand-800 disabled:bg-brand-300 disabled:shadow-none",
         variant === "secondary" &&
-          "border border-line bg-white text-sage-800 hover:bg-sage-50 disabled:text-ink-soft disabled:opacity-60",
-        variant === "soft" && "bg-sage-100 text-sage-800 hover:bg-sage-200 disabled:opacity-60",
+          "border border-brand-200 bg-white text-brand-700 hover:border-brand-300 hover:bg-brand-50 disabled:text-ink-soft disabled:opacity-60",
+        variant === "soft" && "bg-brand-100 text-brand-800 hover:bg-brand-200 disabled:opacity-60",
         variant === "ghost" && "text-ink-soft hover:bg-ivory-deep hover:text-ink",
         className,
       )}
@@ -125,7 +133,7 @@ function Helper({ id, tone = "muted", children }: { id: string; tone?: HelperTon
       className={cn(
         "mt-2 flex items-start gap-1 text-[0.82rem]",
         tone === "muted" && "text-ink-soft",
-        tone === "ok" && "font-medium text-sage-700",
+        tone === "ok" && "font-medium text-brand-700",
         tone === "warn" && "font-medium text-blush-700",
       )}
     >
@@ -136,7 +144,7 @@ function Helper({ id, tone = "muted", children }: { id: string; tone?: HelperTon
 }
 
 const fieldBase =
-  "w-full rounded-[1.1rem] border border-line bg-white px-5 text-[1.05rem] text-ink outline-none transition placeholder:text-ink-soft/60 focus:border-sage-500 focus:ring-4 focus:ring-sage-100";
+  "w-full rounded-[0.875rem] border border-line bg-white px-4 text-[1.05rem] text-ink outline-none transition placeholder:text-ink-soft/60 focus:border-brand-500 focus:ring-4 focus:ring-brand-100 aria-invalid:border-peach-700 aria-invalid:ring-peach-100";
 
 export function TextField({
   label,
@@ -186,8 +194,8 @@ export function TextArea({
       <label htmlFor={id} className={hideLabel ? "sr-only" : "mb-2 block text-base font-bold text-ink"}>
         {label}
       </label>
-      <div className="rounded-[1.25rem] bg-ivory focus-within:ring-4 focus-within:ring-sage-100">
-        <textarea id={id} className="block w-full resize-none rounded-[1.25rem] bg-transparent px-5 pt-4 pb-1 text-base leading-relaxed text-ink outline-none placeholder:text-ink-soft/60" {...area} />
+      <div className="rounded-[0.875rem] border border-line bg-paper focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-100">
+        <textarea id={id} className="block w-full resize-none rounded-[0.875rem] bg-transparent px-4 pt-3.5 pb-1 text-base leading-relaxed text-ink outline-none placeholder:text-ink-soft/60" {...area} />
         {counter && area.maxLength && (
           <div className="px-5 pb-3 text-right text-xs text-ink-soft" aria-hidden>
             {length} / {area.maxLength}
@@ -221,7 +229,7 @@ export function Segmented<T extends string | number>({
     <div
       role={mode === "tabs" ? "tablist" : "group"}
       aria-label={ariaLabel}
-      className={cn("grid auto-cols-fr grid-flow-col gap-1 rounded-[1.25rem] bg-ivory-deep p-1.5", className)}
+      className={cn("grid auto-cols-fr grid-flow-col gap-1 rounded-[0.875rem] border border-line/60 bg-ivory-deep p-1", className)}
     >
       {items.map((it) => {
         const active = it.value === value;
@@ -234,8 +242,8 @@ export function Segmented<T extends string | number>({
             aria-pressed={mode === "toggle" ? active : undefined}
             onClick={() => onChange(it.value)}
             className={cn(
-              "min-h-12 rounded-[1rem] px-3 text-base transition",
-              active ? "bg-white font-bold text-sage-800 shadow-[0_1px_3px_rgba(38,63,51,0.08)]" : "font-medium text-ink-soft hover:text-ink",
+              "min-h-11 rounded-[0.7rem] px-3 text-base transition",
+              active ? "bg-white font-bold text-ink shadow-[0_1px_3px_rgba(40,52,61,0.1)]" : "font-medium text-ink-soft hover:text-ink",
             )}
           >
             {it.label}
@@ -272,10 +280,10 @@ export function ChipGroup<T extends string | number>({
             aria-pressed={on}
             onClick={() => onChange(o.value)}
             className={cn(
-              "inline-flex min-h-11 items-center gap-1 rounded-2xl border px-4 text-[0.95rem] transition",
+              "inline-flex min-h-11 items-center gap-1 rounded-full border px-4 text-[0.95rem] transition",
               on
-                ? "border-sage-300 bg-sage-100 font-bold text-sage-800"
-                : "border-transparent bg-ivory font-medium text-ink-soft hover:border-sage-200 hover:text-ink",
+                ? "border-brand-700 bg-brand-700 font-bold text-white shadow-cta"
+                : "border-line bg-white font-semibold text-ink hover:border-brand-200 hover:bg-brand-50",
             )}
           >
             {o.label}
@@ -312,7 +320,7 @@ export function ScaleTiles<T extends number>({
             onClick={() => onChange(o.value)}
             className={cn(
               "flex min-h-[6.25rem] flex-col items-center justify-between rounded-[1.25rem] px-1 pt-4 pb-3 transition sm:min-h-28",
-              on ? "bg-sage-700 text-white shadow-sm" : "bg-white/75 text-sage-800 hover:bg-white",
+              on ? "bg-brand-700 text-white shadow-sm" : "bg-white/75 text-brand-800 hover:bg-white",
             )}
           >
             <span className="flex h-9 items-center text-[1.75rem] leading-none font-bold">
@@ -352,7 +360,7 @@ export function SegmentScale({
     <div>
       <div className="mb-2 flex items-baseline justify-between gap-2">
         <span className="text-base font-bold text-ink">{label}</span>
-        <span className="text-sm font-bold text-sage-700" aria-hidden>
+        <span className="text-sm font-bold text-brand-700" aria-hidden>
           {value === undefined ? "선택 전" : `${value} / ${max}`}
           {value !== undefined && describe && <span className="ml-1 font-medium text-ink-soft">· {describe(value)}</span>}
         </span>
@@ -366,7 +374,7 @@ export function SegmentScale({
             onClick={() => onChange(0)}
             className={cn(
               "mr-1 min-h-9 shrink-0 rounded-xl px-2.5 text-xs font-bold transition",
-              value === 0 ? "bg-sage-700 text-white" : "bg-ivory text-ink-soft hover:text-ink",
+              value === 0 ? "bg-brand-700 text-white" : "bg-ivory text-ink-soft hover:text-ink",
             )}
           >
             {zeroLabel}
@@ -386,7 +394,7 @@ export function SegmentScale({
               <span
                 className={cn(
                   "block h-2.5 w-full rounded-full transition",
-                  filled ? "bg-sage-700" : "bg-ivory-deep group-hover:bg-sage-200",
+                  filled ? "bg-brand-700" : "bg-ivory-deep group-hover:bg-brand-200",
                 )}
               />
             </button>
@@ -406,7 +414,12 @@ export function StatusPill({
   className,
 }: {
   children: ReactNode;
-  tone?: "sage" | "outline" | "ivory" | "warn";
+  /**
+   * sage: 기본 강조(블루) · outline: 블루 테두리 · ivory: 중립 · warn: 피치(불편·확인 필요)
+   * mint: 잘 맞았어요·완료 · butter: 먹기 어려웠어요 · sky: 처방약 · lavender: 일반약 · dashed: 원인 미확인·확인 필요(중립 점선)
+   * 색만으로 뜻을 전하지 않도록 항상 텍스트(+아이콘)를 함께 씁니다.
+   */
+  tone?: "sage" | "outline" | "ivory" | "warn" | "mint" | "butter" | "sky" | "lavender" | "dashed";
   check?: boolean;
   className?: string;
 }) {
@@ -414,10 +427,15 @@ export function StatusPill({
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-bold whitespace-nowrap",
-        tone === "sage" && "bg-sage-100 text-sage-800",
-        tone === "outline" && "border border-sage-300 bg-sage-50 text-sage-800",
+        tone === "sage" && "bg-brand-100 text-brand-800",
+        tone === "outline" && "border border-brand-200 bg-white text-brand-800",
         tone === "ivory" && "bg-ivory-deep text-ink-soft",
-        tone === "warn" && "bg-blush-50 text-blush-700",
+        tone === "warn" && "bg-peach-100 text-peach-700",
+        tone === "mint" && "bg-mint-100 text-mint-700",
+        tone === "butter" && "bg-butter-100 text-butter-700",
+        tone === "sky" && "bg-sky-100 text-sky-700",
+        tone === "lavender" && "bg-lavender-100 text-lavender-700",
+        tone === "dashed" && "border border-dashed border-ink-soft/50 bg-white text-ink-soft",
         className,
       )}
     >
@@ -431,7 +449,7 @@ export function StatusPill({
 export function Notice({ children, className }: { children: ReactNode; className?: string }) {
   if (!children) return null;
   return (
-    <p aria-live="polite" className={cn("rounded-2xl bg-sage-100 px-4 py-3 text-sm font-semibold text-sage-800", className)}>
+    <p aria-live="polite" className={cn("rounded-[0.875rem] border border-brand-100 bg-brand-50 px-4 py-3 text-sm font-semibold text-brand-800", className)}>
       {children}
     </p>
   );
@@ -441,7 +459,7 @@ export function Notice({ children, className }: { children: ReactNode; className
 export function Alert({ children, className }: { children: ReactNode; className?: string }) {
   if (!children) return null;
   return (
-    <p role="alert" className={cn("rounded-2xl bg-blush-50 px-4 py-3 text-sm font-semibold text-blush-700", className)}>
+    <p role="alert" className={cn("rounded-[0.875rem] border border-peach-100 bg-peach-50 px-4 py-3 text-sm font-semibold text-peach-700", className)}>
       {children}
     </p>
   );
@@ -461,12 +479,12 @@ export function SoftSheet({
 }) {
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-sage-900/30 sm:items-center sm:p-6" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/30 backdrop-blur-[2px] sm:items-center sm:p-6" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className="max-h-[92dvh] w-full overflow-y-auto rounded-t-[2rem] bg-ivory p-4 shadow-xl sm:max-w-2xl sm:rounded-[2rem] sm:p-6"
+        className="max-h-[92dvh] w-full overflow-y-auto rounded-t-[1.5rem] border border-white bg-ivory p-4 shadow-[0_20px_60px_rgba(40,52,61,0.18)] sm:max-w-2xl sm:rounded-[1.5rem] sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between gap-3 px-1">
@@ -481,19 +499,9 @@ export function SoftSheet({
   );
 }
 
-/** 새싹 일러스트 (장식) */
+/** 로그인 화면 장식 — v2에서는 새싹 대신 몽글(구름 마스코트). 호출부 호환을 위해 이름 유지 */
 export function LeafIllustration({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 120 150" className={className} aria-hidden fill="none">
-      <path d="M62 148 C60 120 62 88 74 52 C78 40 82 30 84 22" stroke="#3e6b55" strokeWidth="2.6" strokeLinecap="round" />
-      <path d="M68 92 C46 96 14 86 6 58 C30 50 58 62 68 92 Z" fill="#a7c4ad" />
-      <path d="M68 92 C50 82 30 70 12 60" stroke="#6a967a" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M70 108 C80 78 104 66 118 70 C116 94 98 112 70 108 Z" fill="#dce8dd" />
-      <path d="M70 108 C86 92 100 82 114 74" stroke="#7fa48a" strokeWidth="1.6" strokeLinecap="round" />
-      <ellipse cx="86" cy="18" rx="9" ry="11" fill="#c8dbcb" stroke="#3e6b55" strokeWidth="2.2" />
-      <ellipse cx="86" cy="15" rx="3.4" ry="4" fill="#f8f6f0" />
-    </svg>
-  );
+  return <CloudMascot className={cn("object-contain", className)} />;
 }
 
 /** 켜기/끄기 스위치 (예: 보호자에게 공개, 의료진과 공유) */
@@ -524,7 +532,7 @@ export function Switch({
         <span className="block text-sm font-bold text-ink">{label}</span>
         {description && <span className="block text-xs text-ink-soft">{description}</span>}
       </span>
-      <span className={cn("relative h-7 w-12 shrink-0 rounded-full transition", checked ? "bg-sage-700" : "bg-ivory-deep ring-1 ring-line")} aria-hidden>
+      <span className={cn("relative h-7 w-12 shrink-0 rounded-full transition", checked ? "bg-brand-700" : "bg-ivory-deep ring-1 ring-line")} aria-hidden>
         <span className={cn("absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition-all", checked ? "left-6" : "left-1")} />
       </span>
     </button>
@@ -543,7 +551,7 @@ export function StatusSteps({ steps, current }: { steps: { key: string; label: s
             <span
               className={cn(
                 "inline-flex min-h-7 min-w-0 flex-1 items-center justify-center gap-0.5 rounded-full px-2 text-xs font-bold whitespace-nowrap",
-                i === idx ? "bg-sage-700 text-white" : done ? "bg-sage-100 text-sage-800" : "bg-ivory-deep text-ink-soft",
+                i === idx ? "bg-brand-700 text-white" : done ? "bg-brand-100 text-brand-800" : "bg-ivory-deep text-ink-soft",
               )}
               aria-current={i === idx ? "step" : undefined}
             >
@@ -562,7 +570,7 @@ export function InlineStatus({ error, done }: { error?: string | null; done?: st
   if (error) return <Alert className="mt-3">{error}</Alert>;
   if (done)
     return (
-      <p className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-sage-700" aria-live="polite">
+      <p className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-brand-700" aria-live="polite">
         <Check className="h-4 w-4" aria-hidden /> {done}
       </p>
     );

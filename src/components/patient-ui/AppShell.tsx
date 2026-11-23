@@ -12,7 +12,8 @@ export interface ShellTab<T extends string> {
 }
 
 /**
- * 로그인 버전 공통 화면 틀 — 모바일: 상단 + 하단 탭 / PC: 왼쪽 메뉴
+ * 로그인 버전 공통 화면 틀 (Soft Glass)
+ * 메뉴는 상단 탭 하나로 통일 — PC: 로고 옆 한 줄 / 좁은 화면: 로고 아래 가로 스크롤.
  * (환자·간호사/의료진·보호자 화면이 같은 틀과 공통 컴포넌트를 사용)
  */
 export function AppShell<T extends string>({
@@ -38,7 +39,7 @@ export function AppShell<T extends string>({
   onLogout?: () => void;
   /** 화면 맨 위 띠 (공개 데모: 가상 데이터 표시·역할 전환) */
   topBar?: ReactNode;
-  /** PC 왼쪽 메뉴 아래쪽 안내 문구 */
+  /** 화면 아래쪽 안내 문구 (데이터 출처·주의) */
   sideNote?: ReactNode;
   loadState: LoadState | null;
   onRetry: () => void;
@@ -53,121 +54,80 @@ export function AppShell<T extends string>({
   return (
     <div className="min-h-dvh bg-ivory text-ink">
       {topBar}
-      <div className="lg:flex">
-      {/* PC: 왼쪽 메뉴 */}
-      <aside className="sticky top-0 hidden h-dvh w-64 shrink-0 flex-col border-r border-line bg-ivory px-5 py-7 lg:flex">
-        <Wordmark sub="(가칭)" />
-        <p className="mt-3 text-sm text-ink-soft">
-          <span className="font-bold text-sage-800">{roleLabel}</span>
-          {userLabel && <span> · {userLabel}</span>}
-        </p>
-        {showTabs && (
-          <nav aria-label="메뉴" className="mt-8 space-y-1.5">
-            {tabs.map((t) => (
-              <NavItem key={t.id} label={t.label} icon={t.icon} active={active === t.id} onClick={() => go(t.id)} layout="side" />
-            ))}
-          </nav>
-        )}
-        <div className="mt-auto space-y-3">
-          <p className="rounded-2xl bg-ivory-deep px-4 py-3 text-xs leading-relaxed text-ink-soft">
-            {sideNote ?? "DB 연동 시험 (carelog-dev) · 가상 계정 전용입니다. 실제 환자정보를 입력하지 마세요."}
-          </p>
-          {onLogout && (
-            <PButton variant="secondary" size="md" icon={LogOut} className="w-full" onClick={onLogout}>
-              로그아웃
-            </PButton>
+      <header className="no-print sticky top-0 z-30 border-b border-line/80 bg-white/85 backdrop-blur-md">
+        <div className="mx-auto flex max-w-[1160px] flex-wrap items-center gap-x-6 px-4 sm:px-6 lg:flex-nowrap lg:px-8">
+          <div className="order-1 flex min-h-16 min-w-0 items-center">
+            <Wordmark />
+          </div>
+          <div className="order-2 ml-auto flex shrink-0 items-center gap-2 lg:order-3">
+            <p className="text-right text-xs leading-tight text-ink-soft max-[359px]:hidden sm:text-sm">
+              <span className="font-bold text-ink">{roleLabel}</span>
+              {userLabel && <span className="hidden sm:inline"> · {userLabel}</span>}
+            </p>
+            {onLogout && (
+              <PButton variant="ghost" size="sm" icon={LogOut} onClick={onLogout}>
+                로그아웃
+              </PButton>
+            )}
+          </div>
+          {showTabs && (
+            <nav
+              aria-label="메뉴"
+              className="scrollbar-none order-3 -mx-4 w-[calc(100%+2rem)] overflow-x-auto px-4 pb-2 sm:-mx-6 sm:w-[calc(100%+3rem)] sm:px-6 lg:order-2 lg:mx-0 lg:w-auto lg:flex-1 lg:px-0 lg:pb-0"
+            >
+              <div className="flex w-max gap-1">
+                {tabs.map((t) => (
+                  <NavItem key={t.id} label={t.label} active={active === t.id} onClick={() => go(t.id)} />
+                ))}
+              </div>
+            </nav>
           )}
         </div>
-      </aside>
+      </header>
 
-      <div className="min-w-0 flex-1">
-        {/* 모바일: 상단 */}
-        <header className="sticky top-0 z-30 border-b border-line/70 bg-ivory/95 backdrop-blur lg:hidden">
-          <div className="mx-auto flex max-w-xl items-center justify-between gap-3 px-4 py-3">
-            <div className="min-w-0">
-              <Wordmark />
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <span className="text-xs whitespace-nowrap text-ink-soft max-[359px]:hidden">{roleLabel}</span>
-              {onLogout && (
-                <PButton variant="ghost" size="sm" icon={LogOut} onClick={onLogout}>
-                  로그아웃
-                </PButton>
-              )}
-            </div>
-          </div>
-        </header>
-
-        <main className={cn("mx-auto max-w-xl px-4 pt-5 sm:px-6 lg:max-w-6xl lg:px-10 lg:pt-10 lg:pb-16", showTabs ? "pb-32" : "pb-16")}>
-          {(!loadState || loadState.state === "loading" || loadState.state === "idle" || (!ready && loadState.state === "ready")) && (
-            <p className="py-24 text-center text-ink-soft">불러오는 중…</p>
-          )}
-          {loadState?.state === "error" && (
-            <PCard>
-              <Alert>{loadState.message}</Alert>
-              <PButton variant="secondary" size="md" className="mt-4" onClick={onRetry}>
-                다시 불러오기
-              </PButton>
-            </PCard>
-          )}
-          {ready && children}
-        </main>
-
-        {/* 모바일: 하단 탭 */}
-        {showTabs && (
-          <nav
-            aria-label="메뉴"
-            className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
-          >
-            <div className="mx-auto grid max-w-xl gap-1 px-2 py-2" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
-              {tabs.map((t) => (
-                <NavItem key={t.id} label={t.label} icon={t.icon} active={active === t.id} onClick={() => go(t.id)} layout="bottom" />
-              ))}
-            </div>
-          </nav>
+      <main className="mx-auto max-w-[1160px] px-4 pt-6 pb-16 sm:px-6 lg:px-8 lg:pt-10">
+        {(!loadState || loadState.state === "loading" || loadState.state === "idle" || (!ready && loadState.state === "ready")) && (
+          <p className="py-24 text-center text-ink-soft">불러오는 중…</p>
         )}
-      </div>
-      </div>
+        {loadState?.state === "error" && (
+          <PCard>
+            <Alert>{loadState.message}</Alert>
+            <PButton variant="secondary" size="md" className="mt-4" onClick={onRetry}>
+              다시 불러오기
+            </PButton>
+          </PCard>
+        )}
+        {ready && children}
+        <p className="no-print mt-10 rounded-[0.875rem] border border-line/70 bg-white/60 px-4 py-3 text-xs leading-relaxed text-ink-soft">
+          {sideNote ?? "DB 연동 시험 (carelog-dev) · 가상 계정 전용입니다. 실제 환자정보를 입력하지 마세요."}
+        </p>
+      </main>
     </div>
   );
 }
 
-function NavItem({
-  label,
-  icon: Icon,
-  active,
-  onClick,
-  layout,
-}: {
-  label: string;
-  icon: LucideIcon;
-  active: boolean;
-  onClick: () => void;
-  layout: "side" | "bottom";
-}) {
+function NavItem({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       aria-current={active ? "page" : undefined}
       onClick={onClick}
       className={cn(
-        "flex items-center rounded-2xl transition",
-        layout === "side" ? "min-h-12 w-full gap-3 px-4 text-base" : "min-h-14 min-w-0 flex-col justify-center gap-1 px-0.5 text-[0.7rem] leading-tight",
-        active ? "bg-sage-100 font-bold text-sage-800" : "font-medium text-ink-soft hover:bg-ivory-deep hover:text-ink",
+        "flex min-h-11 shrink-0 items-center rounded-[0.75rem] px-4 text-[0.95rem] whitespace-nowrap transition lg:min-h-12",
+        active ? "bg-brand-100 font-bold text-brand-800" : "font-medium text-ink-soft hover:bg-ivory-deep hover:text-ink",
       )}
     >
-      <Icon className={layout === "side" ? "h-6 w-6" : "h-5 w-5"} strokeWidth={active ? 2.2 : 1.8} aria-hidden />
-      <span className="truncate">{label}</span>
+      {label}
     </button>
   );
 }
 
-/** 화면 제목 (각 탭 상단) */
+/** 화면 제목 (각 탭 상단) — 제목 32/800 (모바일 24) */
 export function PageTitle({ title, sub, action }: { title: string; sub?: ReactNode; action?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div className="min-w-0">
-        <h1 className="text-[1.75rem] leading-tight font-extrabold tracking-tight break-keep text-ink sm:text-3xl">{title}</h1>
+        <h1 className="text-[1.6rem] leading-tight font-extrabold tracking-tight break-keep text-ink sm:text-[1.9rem]">{title}</h1>
         {sub && <p className="mt-1.5 text-ink-soft">{sub}</p>}
       </div>
       {action}

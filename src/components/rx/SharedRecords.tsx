@@ -38,7 +38,7 @@ export function SharedRecordCard({ r }: { r: SharedRecord }) {
       </ul>
       {r.notes && (
         <div className="mt-2 space-y-1.5">
-          <p className="text-xs font-bold text-sage-800">본인이 남긴 복용 경험</p>
+          <p className="text-xs font-bold text-brand-800">본인이 남긴 복용 경험</p>
           {r.notes.length === 0 && <p className="text-sm text-ink-soft">남긴 경험이 없어요.</p>}
           {r.notes.map((n, idx) => (
             <div key={idx} className="rounded-xl bg-ivory p-2.5 text-sm">

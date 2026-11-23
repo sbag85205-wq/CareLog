@@ -185,10 +185,10 @@ export function ProductImport({
   if (stage === "done") {
     return (
       <PCard tone="tint">
-        <p className="flex items-center gap-2 text-lg font-bold text-sage-900">
+        <p className="flex items-center gap-2 text-lg font-bold text-brand-900">
           <CheckCircle2 className="h-6 w-6" aria-hidden /> 일반약 {chosen.length}개를 등록했어요
         </p>
-        <p className="mt-1 text-sm text-sage-800">나의 약 기록에서 확인하고, 먹어 본 뒤 느낀 점을 남겨 보세요.</p>
+        <p className="mt-1 text-sm text-brand-800">나의 약 기록에서 확인하고, 먹어 본 뒤 느낀 점을 남겨 보세요.</p>
       </PCard>
     );
   }
@@ -271,7 +271,7 @@ export function ProductImport({
             <p className="text-xs leading-relaxed text-ink-soft">
               사진은 이 기기 안에서만 읽어요 (서버로 보내지 않음). 제품 확인에는 읽어 낸 제품명만 식약처 검색에 사용해요.
             </p>
-            {stage === "reading" && progress && <p className="text-sm font-semibold text-sage-800">글자 읽는 중… {Math.round(progress.ratio * 100)}%</p>}
+            {stage === "reading" && progress && <p className="text-sm font-semibold text-brand-800">글자 읽는 중… {Math.round(progress.ratio * 100)}%</p>}
           </>
         )}
         <Alert>{error}</Alert>
@@ -380,7 +380,7 @@ export function ProductImport({
             </label>
           </div>
           <label className="flex items-start gap-2 rounded-2xl border border-line bg-white p-3">
-            <input type="checkbox" className="mt-1 h-5 w-5 accent-sage-700" checked={taking} onChange={(e) => setTaking(e.target.checked)} />
+            <input type="checkbox" className="mt-1 h-5 w-5 accent-brand-700" checked={taking} onChange={(e) => setTaking(e.target.checked)} />
             <span className="text-sm">
               <span className="font-bold text-ink">지금 먹고 있어요</span>
               <span className="block text-ink-soft">등록(구매)만으로는 복용한 것으로 보지 않아요. 실제로 먹고 있을 때만 체크하세요.</span>
@@ -445,13 +445,13 @@ function LineCard({
               key={c.itemSeq}
               className={cn(
                 "flex cursor-pointer items-start gap-2 rounded-2xl border p-3",
-                l.pick === c.itemSeq ? "border-sage-500 bg-sage-50" : "border-line bg-white",
+                l.pick === c.itemSeq ? "border-brand-500 bg-brand-50" : "border-line bg-white",
               )}
             >
               <input
                 type="radio"
                 name={`pick-${l.key}`}
-                className="mt-1 accent-sage-700"
+                className="mt-1 accent-brand-700"
                 checked={l.pick === c.itemSeq}
                 onChange={() => onPick(c.itemSeq)}
                 aria-label={`${c.name} · ${c.company}`}
@@ -473,10 +473,10 @@ function LineCard({
           <label
             className={cn(
               "flex cursor-pointer items-center gap-2 rounded-2xl border p-3 text-sm",
-              l.pick === null ? "border-sage-500 bg-sage-50" : "border-line bg-white",
+              l.pick === null ? "border-brand-500 bg-brand-50" : "border-line bg-white",
             )}
           >
-            <input type="radio" name={`pick-${l.key}`} className="accent-sage-700" checked={l.pick === null} onChange={() => onPick(null)} />
+            <input type="radio" name={`pick-${l.key}`} className="accent-brand-700" checked={l.pick === null} onChange={() => onPick(null)} />
             {multi ? "이 줄은 등록 안 함" : "여기에 없어요 · 등록 안 함"}
           </label>
         </fieldset>
@@ -489,14 +489,14 @@ function ExampleBox() {
   const b = EXAMPLE_BOX;
   return (
     <figure
-      className="mx-auto w-full max-w-sm overflow-hidden rounded-2xl border-2 border-sage-300 bg-gradient-to-br from-white to-sage-50 p-5 shadow-sm"
+      className="mx-auto w-full max-w-sm overflow-hidden rounded-2xl border-2 border-brand-300 bg-gradient-to-br from-white to-brand-50 p-5 shadow-sm"
       aria-label="예제 일반약 상자 (가상)"
     >
-      <span className="inline-block rounded-md bg-sage-700 px-2 py-0.5 text-xs font-bold text-white">{b.badge}</span>
-      <p className="mt-3 text-2xl font-extrabold text-sage-900">{b.title}</p>
-      <p className="text-sm font-semibold text-sage-800">{b.sub}</p>
+      <span className="inline-block rounded-md bg-brand-700 px-2 py-0.5 text-xs font-bold text-white">{b.badge}</span>
+      <p className="mt-3 text-2xl font-extrabold text-brand-900">{b.title}</p>
+      <p className="text-sm font-semibold text-brand-800">{b.sub}</p>
       <p className="mt-6 text-right text-sm text-ink-soft">{b.count}</p>
-      <figcaption className="mt-2 border-t border-sage-200 pt-2 text-center text-xs text-ink-soft">데모용 예시 · {b.note}</figcaption>
+      <figcaption className="mt-2 border-t border-brand-200 pt-2 text-center text-xs text-ink-soft">데모용 예시 · {b.note}</figcaption>
     </figure>
   );
 }

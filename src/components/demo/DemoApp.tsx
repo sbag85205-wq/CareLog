@@ -144,14 +144,14 @@ export function DemoApp() {
 
 function DemoBar({ role, onRole, onReset }: { role: DemoRole; onRole: (r: DemoRole) => void; onReset: () => void }) {
   return (
-    <div className="border-b border-sage-200 bg-sage-100" role="region" aria-label="가상 데이터 데모 안내">
+    <div className="border-b border-brand-200 bg-brand-100" role="region" aria-label="가상 데이터 데모 안내">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:px-6 lg:flex-row lg:items-center lg:justify-between lg:px-10">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2">
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sage-700 px-3 py-1 text-sm font-bold text-white">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-700 px-3 py-1 text-sm font-bold text-white">
               <ShieldCheck className="h-4 w-4" aria-hidden /> 가상 데이터 데모
             </span>
-            <span className="hidden text-sm text-sage-900 sm:inline">로그인 없이 체험 · 이 브라우저에만 저장돼요</span>
+            <span className="hidden text-sm text-brand-900 sm:inline">로그인 없이 체험 · 이 브라우저에만 저장돼요</span>
           </div>
           <span className="lg:hidden">
             <PButton variant="ghost" size="sm" icon={RotateCcw} onClick={onReset}>
@@ -174,7 +174,7 @@ function DemoBar({ role, onRole, onReset }: { role: DemoRole; onRole: (r: DemoRo
                 onClick={() => onRole(id)}
                 className={cn(
                   "flex min-h-11 items-center justify-center gap-1.5 rounded-[0.9rem] text-[0.95rem] transition",
-                  role === id ? "bg-sage-700 font-bold text-white shadow-sm" : "font-semibold text-sage-900 hover:bg-white",
+                  role === id ? "bg-brand-700 font-bold text-white shadow-sm" : "font-semibold text-brand-900 hover:bg-white",
                 )}
               >
                 <Icon className="h-4 w-4" aria-hidden />
@@ -188,7 +188,7 @@ function DemoBar({ role, onRole, onReset }: { role: DemoRole; onRole: (r: DemoRo
             </PButton>
           </span>
         </div>
-        <p className="text-xs text-sage-900 sm:hidden">로그인 없이 체험 · 이 브라우저에만 저장돼요 · 실제 의료정보 아님</p>
+        <p className="text-xs text-brand-900 sm:hidden">로그인 없이 체험 · 이 브라우저에만 저장돼요 · 실제 의료정보 아님</p>
       </div>
       <p className="sr-only">
         실제 계정으로 쓰려면 <Link href="/login">로그인</Link>

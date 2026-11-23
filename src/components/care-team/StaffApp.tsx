@@ -127,7 +127,7 @@ function PatientRow({ s, onOpen }: { s: PatientSummary; onOpen: () => void }) {
       type="button"
       onClick={onOpen}
       aria-label={`${s.patient.name} 상세 보기`}
-      className="w-full rounded-[1.75rem] border border-line bg-white p-5 text-left transition hover:border-sage-300 hover:bg-sage-50"
+      className="w-full rounded-[1.75rem] border border-line bg-white p-5 text-left transition hover:border-brand-300 hover:bg-brand-50"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-lg font-bold text-ink">{s.patient.name}</p>

@@ -74,8 +74,8 @@ export function MedicationsView({
             }
           />
           <PCard tone="tint">
-            <p className="text-lg font-bold text-sage-900">복용 중인 약 {medications.length}개</p>
-            <p className="mt-1 text-sm text-sage-800">
+            <p className="text-lg font-bold text-brand-900">복용 중인 약 {medications.length}개</p>
+            <p className="mt-1 text-sm text-brand-800">
               가상 데이터예요. 실제 복용·변경·중단은 의료진과 상담해 주세요.
               {editable && " 보호자에게는 '보호자에게 공개'를 켠 약만 보여요."}
             </p>
@@ -102,7 +102,7 @@ export function MedicationsView({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="flex items-center gap-2 text-lg font-bold break-words text-ink">
-                      <Pill className="h-5 w-5 shrink-0 text-sage-600" aria-hidden />
+                      <Pill className="h-5 w-5 shrink-0 text-brand-600" aria-hidden />
                       {m.name}
                     </p>
                     <p className="mt-1 text-sm text-ink-soft">{[m.dosage, m.schedule].filter(Boolean).join(" · ") || "용량·복용 시간 미입력"}</p>

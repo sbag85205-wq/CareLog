@@ -255,12 +255,12 @@ function HomeView({
 
   const recentCard = latest && (
     <PCard tone="tint" className="!py-4">
-      <p className="text-sm font-bold text-sage-800">최근 기록 · {formatKoreanDate(latest.date, false)}</p>
+      <p className="text-sm font-bold text-brand-800">최근 기록 · {formatKoreanDate(latest.date, false)}</p>
       <div className="mt-1 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
         <p className="text-sm text-ink">
           {CONDITION_WORD[latest.condition]} · 통증 {latest.pain}점
         </p>
-        <button type="button" onClick={onShowRecords} className="text-sm font-semibold text-sage-800 underline-offset-4 hover:underline">
+        <button type="button" onClick={onShowRecords} className="text-sm font-semibold text-brand-800 underline-offset-4 hover:underline">
           전체 기록 보기 →
         </button>
       </div>
@@ -314,10 +314,10 @@ function HomeView({
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-lg font-bold text-ink">오늘의 컨디션</p>
-                    <p className="mt-2 text-[1.6rem] font-extrabold text-sage-700">
+                    <p className="mt-2 text-[1.6rem] font-extrabold text-brand-700">
                       {CONDITION_WORD[todayRecord.condition]} · 통증 {todayRecord.pain}점
                     </p>
-                    <p className="mt-1 text-sm text-sage-800">
+                    <p className="mt-1 text-sm text-brand-800">
                       ✓ 기록 완료 · {formatKoreanTime(todayRecord.updatedAt)} · 수면 {SLEEP_WORD[todayRecord.sleep]}
                     </p>
                   </div>
@@ -326,7 +326,7 @@ function HomeView({
                   </PButton>
                 </div>
               </PCard>
-              <button type="button" onClick={onShowRecords} className="w-full rounded-[1.75rem] border border-line bg-white p-5 text-left hover:bg-sage-50">
+              <button type="button" onClick={onShowRecords} className="w-full rounded-[1.75rem] border border-line bg-white p-5 text-left hover:bg-brand-50">
                 <p className="font-bold text-ink">통원 때의 기록도 그대로 이어져요.</p>
                 <p className="mt-1 text-sm text-ink-soft">기록 보기에서 모든 모드를 함께 확인해요. →</p>
               </button>
@@ -359,7 +359,7 @@ function HomeView({
           <PCard>
             <h2 className="text-lg font-bold text-ink">이번 주 컨디션</h2>
             <p className="mt-3 flex items-baseline gap-2">
-              <span className="text-3xl font-extrabold text-sage-700">{weekAvg === null ? "—" : weekAvg.toFixed(1)}</span>
+              <span className="text-3xl font-extrabold text-brand-700">{weekAvg === null ? "—" : weekAvg.toFixed(1)}</span>
               <span className="text-ink-soft">/ 5점 평균</span>
             </p>
             <p className="mt-1 text-sm text-ink-soft">최근 7일 중 {weekRecs.length}일 기록</p>
@@ -369,7 +369,7 @@ function HomeView({
                 return (
                   <div key={d} className="text-center">
                     <div
-                      className={cn("mx-auto h-8 w-full rounded-lg", r ? "bg-sage-700" : "bg-ivory-deep")}
+                      className={cn("mx-auto h-8 w-full rounded-lg", r ? "bg-brand-700" : "bg-ivory-deep")}
                       style={r ? { opacity: 0.35 + r.condition * 0.13 } : undefined}
                     />
                     <span className="mt-1 block text-[0.7rem] text-ink-soft">{Number(d.slice(8))}</span>

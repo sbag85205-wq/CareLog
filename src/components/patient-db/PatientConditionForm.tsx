@@ -34,7 +34,7 @@ export function PatientConditionForm({ aside, ...props }: ConditionDraftProps & 
           onChange={draft.set.condition}
           options={SCALE.map((s) => ({ value: s, label: CONDITION_WORD[s] }))}
         />
-        <p className="mt-3 min-h-5 text-sm font-semibold text-sage-800" aria-live="polite">
+        <p className="mt-3 min-h-5 text-sm font-semibold text-brand-800" aria-live="polite">
           {v.condition ? (
             <span className="inline-flex items-center gap-1">
               <Check className="h-4 w-4" aria-hidden />
@@ -117,7 +117,7 @@ export function PatientConditionForm({ aside, ...props }: ConditionDraftProps & 
         <Alert>{draft.error}</Alert>
         <p className="text-center text-sm" aria-live="polite">
           {draft.saved ? (
-            <span className="inline-flex items-center gap-1 font-bold text-sage-700">
+            <span className="inline-flex items-center gap-1 font-bold text-brand-700">
               <Check className="h-4 w-4" aria-hidden /> 저장되었습니다. 다시 저장하면 수정돼요.
             </span>
           ) : draft.missing.length ? (

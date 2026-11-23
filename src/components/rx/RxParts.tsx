@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Pencil } from "lucide-react";
+import { Check, CircleHelp, Pencil, Pill, Waves } from "lucide-react";
 import { useState } from "react";
 import { Alert, cn, PButton, StatusPill } from "@/components/patient-ui/kit";
 import { useAsyncAction } from "@/hooks/useAsyncAction";
@@ -30,7 +30,7 @@ export const SOURCE_TEXT = {
 export function SourceNote({ source, text, title }: { source: keyof typeof SOURCE_TEXT; text: string; title?: string }) {
   if (!text.trim()) return null;
   return (
-    <div className={cn("rounded-xl px-3 py-2 text-sm", source === "mfds" ? "bg-sage-50" : "bg-ivory")}>
+    <div className={cn("rounded-xl border px-3 py-2 text-sm", source === "mfds" ? "border-brand-100 bg-white" : source === "user" ? "border-lavender-100 bg-lavender-50" : "border-line/70 bg-ivory")}>
       <StatusPill tone={source === "rx" ? "ivory" : source === "mfds" ? "outline" : "sage"} className="!px-2 !py-0 !text-[0.7rem]">
         출처: {SOURCE_TEXT[source]}
       </StatusPill>
@@ -48,7 +48,7 @@ export function CategoryPills({ item, showSource }: { item: Pick<RxItem, "catego
   return (
     <span className="flex flex-wrap items-center gap-1">
       {item.categories.map((c) => (
-        <StatusPill key={c} tone={c === "unclassified" ? "warn" : "outline"} className="!px-2.5 !py-0.5 !text-xs">
+        <StatusPill key={c} tone={c === "unclassified" ? "dashed" : "outline"} className="!px-2.5 !py-0.5 !text-xs">
           {c === "unclassified" ? "미분류 · 확인 필요" : categoryLabel(c)}
         </StatusPill>
       ))}
@@ -57,28 +57,35 @@ export function CategoryPills({ item, showSource }: { item: Pick<RxItem, "catego
   );
 }
 
-/** 복용 경험 태그: 도움(세이지) · 불편(분홍) · 메모 표시(아이보리) */
+/**
+ * 복용 경험 태그 — 색 + 아이콘 + 텍스트를 함께 (색만으로 뜻을 전하지 않음)
+ * 도움(민트 ✓) · 복용 후 불편(피치 ~) · 복용 과정 불편(버터 ⊘) · 원인 미확인(중립 점선 ?, 부작용 확정처럼 보이지 않게)
+ */
+const TAG_TONE = { good: "mint", after: "warn", process: "butter", note: "dashed" } as const;
+const TAG_ICON = { good: Check, after: Waves, process: Pill, note: CircleHelp } as const;
+
 export function TagPills({ tags, small }: { tags: string[]; small?: boolean }) {
   if (!tags.length) return null;
   return (
     <span className="flex flex-wrap gap-1">
-      {tags.map((t) => (
-        <StatusPill
-          key={t}
-          tone={isDiscomfortTag(t) ? "warn" : tagGroup(t) === "note" ? "ivory" : "sage"}
-          className={small ? "!px-2.5 !py-0.5 !text-xs" : undefined}
-        >
-          {tagLabel(t) === "기타" ? `기타 (${t.replace(/^기타 /, "")})` : t}
-        </StatusPill>
-      ))}
+      {tags.map((t) => {
+        const g = tagGroup(t) ?? (isDiscomfortTag(t) ? "after" : "good");
+        const Icon = TAG_ICON[g];
+        return (
+          <StatusPill key={t} tone={TAG_TONE[g]} className={small ? "!px-2.5 !py-0.5 !text-xs" : undefined}>
+            <Icon className={small ? "h-3 w-3 shrink-0" : "h-3.5 w-3.5 shrink-0"} strokeWidth={2.4} aria-hidden />
+            {tagLabel(t) === "기타" ? `기타 (${t.replace(/^기타 /, "")})` : t}
+          </StatusPill>
+        );
+      })}
     </span>
   );
 }
 
-/** 처방·일반약 표시 */
+/** 처방·일반약 표시 — 처방(스카이) · 일반약(라벤더) */
 export function KindPill({ p }: { p: Pick<Prescription, "kind"> }) {
   return (
-    <StatusPill tone={p.kind === "otc" ? "ivory" : "outline"} className="!px-2.5 !py-0.5 !text-xs">
+    <StatusPill tone={p.kind === "otc" ? "lavender" : "sky"} className="!px-2.5 !py-0.5 !text-xs">
       {KIND_LABEL[p.kind]}
     </StatusPill>
   );
@@ -111,7 +118,7 @@ export function ActiveItemCard({
 }) {
   const period = periodText(prescription, item, today);
   return (
-    <article className="rounded-[1.5rem] border border-line bg-white p-4 sm:p-5" aria-label={`복용 중: ${item.name}`}>
+    <article className="rounded-[1.25rem] border border-line bg-white p-4 shadow-soft sm:p-5" aria-label={`복용 중: ${item.name}`}>
       <div className="flex items-start justify-between gap-2">
         <p className="min-w-0 text-lg font-bold break-words text-ink">
           {item.name}
@@ -119,7 +126,7 @@ export function ActiveItemCard({
         </p>
         {period.over && <StatusPill tone="warn">기간 지남</StatusPill>}
       </div>
-      <p className="mt-1 font-semibold text-sage-800">{howToTake(item)}</p>
+      <p className="mt-1 font-semibold text-brand-800">{howToTake(item)}</p>
       <p className="mt-0.5 text-sm text-ink-soft">{period.text}</p>
       <div className="mt-2 space-y-1.5">
         <SourceNote source="rx" text={item.cautionRx} />
@@ -130,7 +137,7 @@ export function ActiveItemCard({
           type="button"
           onClick={onOpen}
           disabled={!onOpen}
-          className="text-left text-sm font-semibold text-sage-700 underline-offset-4 hover:underline disabled:no-underline"
+          className="text-left text-sm font-semibold text-brand-700 underline-offset-4 hover:underline disabled:no-underline"
         >
           {slashDate(prescription.prescribedOn)} {prescription.department || "진료과 미입력"} 처방 →
         </button>
@@ -167,7 +174,7 @@ export function QuestionItem({ q, repo, readOnly }: { q: VisitQuestion; repo?: S
             value={text}
             maxLength={200}
             onChange={(e) => setText(e.target.value)}
-            className="h-11 w-full rounded-xl border border-line bg-white px-3 text-[0.95rem] text-ink outline-none focus:border-sage-500 focus:ring-4 focus:ring-sage-100"
+            className="h-11 w-full rounded-xl border border-line bg-white px-3 text-[0.95rem] text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
           />
           <Alert>{action.error}</Alert>
           <div className="flex gap-2">

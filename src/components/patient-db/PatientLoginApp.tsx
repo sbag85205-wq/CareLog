@@ -54,19 +54,19 @@ export function PatientLoginApp() {
     <div className="min-h-dvh bg-ivory text-ink">
       <div className="mx-auto grid min-h-dvh max-w-6xl lg:grid-cols-[1fr_minmax(0,30rem)] lg:items-center lg:gap-12 lg:px-10 lg:py-10">
         {/* PC: 왼쪽 소개 */}
-        <section className="relative hidden h-full max-h-[44rem] overflow-hidden rounded-[2.5rem] bg-sage-100 p-12 lg:flex lg:flex-col" aria-hidden>
-          <Wordmark sub="(가칭)" />
-          <p className="mt-auto text-[2.6rem] leading-[1.25] font-extrabold tracking-tight text-sage-900">
+        <section className="relative hidden h-full max-h-[44rem] overflow-hidden rounded-[2.5rem] bg-brand-100 p-12 lg:flex lg:flex-col" aria-hidden>
+          <Wordmark />
+          <p className="mt-auto text-[2.6rem] leading-[1.25] font-extrabold tracking-tight text-brand-900">
             오늘의 나를,
             <br />
             천천히 기록해요.
           </p>
-          <p className="mt-4 text-lg text-sage-800">작은 변화도 놓치지 않도록 함께할게요.</p>
-          <ul className="mt-10 space-y-3 text-sage-900">
+          <p className="mt-4 text-lg text-brand-800">작은 변화도 놓치지 않도록 함께할게요.</p>
+          <ul className="mt-10 space-y-3 text-brand-900">
             {["하루 한 번, 컨디션과 몸의 신호를 기록해요", "7일·30일 흐름을 그래프로 살펴봐요", "같은 날 다시 저장하면 그날 기록이 수정돼요"].map((t) => (
               <li key={t} className="flex items-center gap-2.5">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/70">
-                  <Check className="h-4 w-4 text-sage-700" />
+                  <Check className="h-4 w-4 text-brand-700" />
                 </span>
                 {t}
               </li>
@@ -78,7 +78,7 @@ export function PatientLoginApp() {
         <main className="px-5 pt-8 pb-10 sm:mx-auto sm:w-full sm:max-w-md lg:max-w-none lg:px-0 lg:py-0">
           <PCard className="!p-0 lg:!p-10 lg:shadow-[0_8px_30px_rgba(38,63,51,0.06)] max-lg:!border-0 max-lg:!bg-transparent">
             <div className="relative">
-              <Wordmark sub="(가칭)" className="lg:hidden" />
+              <Wordmark className="lg:hidden" />
               <h1 className="mt-10 text-[1.85rem] leading-snug font-extrabold tracking-tight text-ink lg:mt-0">
                 <span className="lg:hidden">
                   오늘의 나를,
@@ -131,13 +131,13 @@ export function PatientLoginApp() {
               <p>DB 연동 시험 화면 · 가상 계정만 사용하세요. 실명·실제 정보는 입력하지 마세요.</p>
               <p>
                 보호자·간호사·관리자이신가요?{" "}
-                <Link href="/login/member" className="font-semibold text-sage-700 underline underline-offset-4">
+                <Link href="/login/member" className="font-semibold text-brand-700 underline underline-offset-4">
                   보호자·의료진 로그인
                 </Link>
               </p>
               <p>
                 로그인 없이 둘러보기:{" "}
-                <Link href="/demo" className="font-semibold text-sage-700 underline underline-offset-4">
+                <Link href="/demo" className="font-semibold text-brand-700 underline underline-offset-4">
                   가상 데이터 데모
                 </Link>
               </p>

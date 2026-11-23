@@ -121,7 +121,7 @@ export function RxHistory({
 
         {starred.length > 0 && !starredOnly && !filter?.starredOnly && (
           <section aria-label="★ 보관한 기록" className="space-y-2">
-            <h3 className="px-1 text-sm font-bold text-sage-800">★ 보관한 기록</h3>
+            <h3 className="px-1 text-sm font-bold text-brand-800">★ 보관한 기록</h3>
             <RxList list={starred} snapshot={snapshot} selected={desktopShown?.id ?? null} onOpen={setSelected} store={readOnly ? null : store} />
           </section>
         )}
@@ -189,7 +189,7 @@ function RxList({
               aria-current={selected === p.id ? "true" : undefined}
               className={cn(
                 "w-full rounded-[1.25rem] border p-4 pr-14 text-left transition",
-                selected === p.id ? "border-sage-500 bg-sage-50 lg:shadow-sm" : "border-line bg-white hover:border-sage-300",
+                selected === p.id ? "border-brand-500 bg-brand-50 lg:shadow-sm" : "border-line bg-white hover:border-brand-300",
               )}
             >
               <span className="flex items-center gap-2">
@@ -216,13 +216,13 @@ function RxList({
                 onClick={() => void store.setStarred(p.id, !p.starred)}
                 className={cn(
                   "absolute top-3 right-3 flex h-10 w-10 items-center justify-center rounded-xl",
-                  p.starred ? "text-sage-700" : "text-ink-soft/60 hover:text-ink-soft",
+                  p.starred ? "text-brand-700" : "text-ink-soft/60 hover:text-ink-soft",
                 )}
               >
                 <Star className="h-5 w-5" fill={p.starred ? "currentColor" : "none"} aria-hidden />
               </button>
             ) : (
-              p.starred && <Star className="absolute top-4 right-4 h-5 w-5 text-sage-700" fill="currentColor" aria-label="보관한 처방" />
+              p.starred && <Star className="absolute top-4 right-4 h-5 w-5 text-brand-700" fill="currentColor" aria-label="보관한 처방" />
             )}
           </li>
         );

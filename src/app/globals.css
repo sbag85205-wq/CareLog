@@ -1,36 +1,65 @@
 @import "tailwindcss";
 
+/*
+ * CareLog Design System v2 · Soft Glass
+ * (docs: CareLog 디자인 개선 1차 → 2차)
+ * - CTA는 항상 블루 하나(brand-700). 민트·세이지는 보조 포인트, 라벤더·피치·버터는 상태 배경.
+ * - 유리 효과·3D 소품은 홈 Hero, 강조 카드에만 씁니다. 목록·폼·약 정보는 불투명 흰색.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #0f172a;
+  --background: #f8fafc;
+  --foreground: #28343d;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  /* 환자 화면 리뉴얼 팔레트 (따뜻한 아이보리 + 파스텔 세이지) — /login, /my 에서 사용 */
-  --color-ivory: #f8f6f0;
-  --color-ivory-deep: #efece4;
-  --color-line: #e5e1d6;
-  --color-ink: #24302a;
-  --color-ink-soft: #66706a;
-  --color-sage-50: #f1f6f1;
-  --color-sage-100: #e0ebe1;
-  --color-sage-200: #c8dbcb;
-  --color-sage-300: #a7c4ad;
-  --color-sage-500: #6a967a;
-  --color-sage-600: #4f7d62;
-  --color-sage-700: #3e6b55;
-  --color-sage-800: #315744;
-  --color-sage-900: #263f33;
-  --color-blush-50: #fbf0ee;
-  --color-blush-700: #9a4a3f;
-  --font-sans: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, -apple-system,
-    "Segoe UI", sans-serif;
+
+  /* 바탕·글자·테두리 (이름은 이전과 같고 값만 Soft Glass로) */
+  --color-ivory: #f8fafc; /* --page-bg · 앱 배경 */
+  --color-ivory-deep: #eef2f7; /* 탭 바탕·보조 면 */
+  --color-paper: #fcfaf5; /* 원본 메모 */
+  --color-line: #e4eaf0; /* --stroke */
+  --color-ink: #28343d;
+  --color-ink-soft: #5a6873;
+
+  /* 브랜드 블루 (CTA·링크·활성) — 이전 세이지 자리를 대신함 */
+  --color-brand-50: #f3f7fe;
+  --color-brand-100: #e5f3fc; /* --sky-soft · 활성 탭 · 검색 */
+  --color-brand-200: #cfdcf4;
+  --color-brand-300: #a9bce9;
+  --color-brand-500: #6c84d2;
+  --color-brand-600: #5a74cc;
+  --color-brand-700: #4f6ac6; /* --brand-blue · CTA */
+  --color-brand-800: #425cb4; /* --brand-blue-hover */
+  --color-brand-900: #2e4280;
+
+  /* 보조 포인트 */
+  --color-sage: #76ac8e;
+  --color-mint-50: #f1f9f4;
+  --color-mint-100: #e3f3e9; /* --mint-soft · 잘 맞았어요 */
+  --color-mint-200: #c9e6d4;
+  --color-mint-700: #2f7350;
+  --color-sky-100: #e5f3fc;
+  --color-sky-700: #2b679a;
+  --color-lavender-50: #f6f4fe;
+  --color-lavender-100: #eeebfc; /* --lavender-soft · 일반약 · 진료 준비 */
+  --color-lavender-700: #5b4bb0;
+  --color-peach-50: #fff7f2;
+  --color-peach-100: #fff0e8; /* --peach-soft · 불편했어요 */
+  --color-peach-700: #a4472f;
+  --color-butter-100: #fff4dd; /* --butter-soft · 먹기 어려웠어요 */
+  --color-butter-700: #85570b;
+  /* 이전 이름 호환 (오류·경고) */
+  --color-blush-50: #fff0e8;
+  --color-blush-700: #a4472f;
+
+  --font-sans: "Pretendard Variable", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui,
+    -apple-system, "Segoe UI", sans-serif;
 }
 
 html {
-  /* 큰 글씨 기본값 — 고령 환자 가독성 */
+  /* 큰 글씨 기본값 — 고령 사용자 가독성 */
   font-size: 17px;
   -webkit-text-size-adjust: 100%;
 }
@@ -48,8 +77,69 @@ button {
 }
 
 :focus-visible {
-  outline: 3px solid #2dd4bf;
+  outline: 2px solid #4f6ac6;
   outline-offset: 2px;
+}
+
+/* ───────────── Soft Glass 표면 ───────────── */
+
+/* 공용 카드 그림자: 중립색 4% + 위쪽 1px 흰 하이라이트 */
+@utility shadow-soft {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    0 1px 2px rgb(40 52 61 / 0.04),
+    0 8px 24px rgb(40 52 61 / 0.04);
+}
+
+/* CTA 버튼: 블루 계열의 옅은 그림자 */
+@utility shadow-cta {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.18),
+    0 6px 16px rgb(79 106 198 / 0.24);
+}
+
+/* 유리 카드 (Hero 안의 칩, 강조 카드) — 흰색 70~90% + blur */
+@utility glass {
+  background: rgb(255 255 255 / 0.72);
+  border: 1px solid rgb(255 255 255 / 0.85);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.95),
+    0 8px 24px rgb(40 52 61 / 0.05);
+}
+
+/* 홈 Hero 바탕: 민트 → 스카이 → 라벤더 */
+@utility bg-hero {
+  background:
+    radial-gradient(60% 80% at 8% 100%, rgb(208 236 221 / 0.85), transparent 70%),
+    radial-gradient(50% 70% at 55% 0%, rgb(214 236 250 / 0.9), transparent 70%),
+    radial-gradient(45% 80% at 100% 30%, rgb(230 226 252 / 0.95), transparent 70%),
+    linear-gradient(135deg, #e6f4ee 0%, #e9f3fb 50%, #efedfc 100%);
+}
+
+/* 가로 스크롤 메뉴: 스크롤바 숨김 (스크롤은 그대로) */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* 유리 효과 미지원 브라우저: 흰색 92% 불투명 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass {
+    background: rgb(255 255 255 / 0.92);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
 
 /* 진료용 요약 인쇄 (VisitSummary): 요약 영역만 인쇄 · PDF 저장 */
@@ -71,5 +161,9 @@ button {
     max-height: none !important;
     overflow: visible !important;
     box-shadow: none !important;
+  }
+  /* 메뉴·마스코트·3D 소품·유리·그라데이션은 인쇄하지 않음 */
+  .no-print {
+    display: none !important;
   }
 }

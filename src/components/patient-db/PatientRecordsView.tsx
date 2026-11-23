@@ -120,7 +120,7 @@ export function ConditionTrend({ byDate, today, range }: { byDate: Map<string, H
         action={<span className="pt-1 text-sm whitespace-nowrap text-ink-soft">{`${formatDotDate(dates[0])} – ${formatDotDate(dates.at(-1)!)}`}</span>}
       />
       <p className="flex items-baseline gap-2">
-        <span className="text-[2rem] leading-none font-extrabold text-sage-700">{avg === null ? "평균 —" : `평균 ${avg.toFixed(1)}`}</span>
+        <span className="text-[2rem] leading-none font-extrabold text-brand-700">{avg === null ? "평균 —" : `평균 ${avg.toFixed(1)}`}</span>
         <span className="text-ink-soft">/ 5점</span>
       </p>
       <p className="mt-2 text-sm text-ink-soft">
@@ -294,14 +294,14 @@ function MonthCalendar({
               onClick={() => onSelect(d)}
               className={cn(
                 "mx-auto flex h-12 w-full max-w-12 flex-col items-center justify-center rounded-2xl text-[0.95rem] transition",
-                isSel ? "bg-sage-700 font-bold text-white" : inWindow ? "text-ink hover:bg-sage-50" : "text-ink-soft/40",
-                d === today && !isSel && "font-bold text-sage-700 ring-1 ring-sage-300",
+                isSel ? "bg-brand-700 font-bold text-white" : inWindow ? "text-ink hover:bg-brand-50" : "text-ink-soft/40",
+                d === today && !isSel && "font-bold text-brand-700 ring-1 ring-brand-300",
               )}
             >
               <span>{Number(d.slice(8))}</span>
               <span className="flex h-2 items-center" aria-hidden>
                 {r ? (
-                  <span className={cn("h-1.5 w-1.5 rounded-full", isSel ? "bg-white" : "bg-sage-600")} />
+                  <span className={cn("h-1.5 w-1.5 rounded-full", isSel ? "bg-white" : "bg-brand-600")} />
                 ) : inWindow ? (
                   <span className={cn("text-[0.6rem] leading-none", isSel ? "text-white" : "text-ink-soft")}>—</span>
                 ) : null}
@@ -312,7 +312,7 @@ function MonthCalendar({
       </div>
       <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-soft">
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-sage-600" aria-hidden /> 기록한 날
+          <span className="h-1.5 w-1.5 rounded-full bg-brand-600" aria-hidden /> 기록한 날
         </span>
         <span>— 기록 없는 날</span>
       </p>
@@ -352,7 +352,7 @@ function DayDetail({ date, record: r, onEdit }: { date: string; record?: HealthR
 
       {r ? (
         <>
-          <p className="text-[2rem] leading-tight font-extrabold text-sage-700">{CONDITION_WORD[r.condition]}</p>
+          <p className="text-[2rem] leading-tight font-extrabold text-brand-700">{CONDITION_WORD[r.condition]}</p>
           <p className="mt-1 text-sm text-ink-soft">
             {MODE_LABEL[r.recordedIn]} 기록 · {formatKoreanTime(r.updatedAt)} 저장
           </p>

@@ -4,6 +4,7 @@ import { PackagePlus, Search, Star, X } from "lucide-react";
 import { useState } from "react";
 import { MedicationsView } from "@/components/patient-db/MedicationsView";
 import { PageTitle } from "@/components/patient-ui/AppShell";
+import { BottleIcon } from "@/components/patient-ui/illustrations";
 import { ChipGroup, cn, Notice, PButton, PCard, Segmented, Switch } from "@/components/patient-ui/kit";
 import type { DbSnapshot, SupabaseRepository } from "@/lib/repository/supabase";
 import { CATEGORIES } from "@/lib/rx/categories";
@@ -115,7 +116,7 @@ export function MedRecordsView({
               onChange={(e) => set({ query: e.target.value || undefined })}
               placeholder="기억나는 제품명·성분 일부"
               aria-label="제품명·성분으로 찾기"
-              className="h-14 w-full rounded-[1.25rem] border border-line bg-white pr-4 pl-12 text-lg outline-none focus:border-sage-500 focus:ring-4 focus:ring-sage-100"
+              className="h-14 w-full rounded-[1.25rem] border border-line bg-white pr-4 pl-12 text-lg outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
             />
           </label>
 
@@ -211,7 +212,8 @@ export function MedRecordsView({
             <section aria-label="찾은 약" className="space-y-2">
               <h2 className="px-1 text-sm font-bold text-ink-soft">찾은 약 · {rows.length}개</h2>
               {rows.length === 0 ? (
-                <PCard tone="ivory">
+                <PCard tone="ivory" className="flex flex-col items-center gap-2 text-center">
+                  <BottleIcon className="h-20 w-20" />
                   <p className="text-ink-soft">
                     {rx.items.length
                       ? "조건에 맞는 약이 없어요. 조건을 줄여 보세요."
@@ -272,7 +274,7 @@ function ItemCard({ row: { item: i, prescription: p }, rx, store, onOpen }: { ro
         type="button"
         onClick={onOpen}
         aria-label={`${i.name} · ${slashDate(p.prescribedOn)}`}
-        className="w-full rounded-[1.25rem] border border-line bg-white p-4 pr-14 text-left transition hover:border-sage-300"
+        className="w-full rounded-[1.25rem] border border-line bg-white p-4 pr-14 text-left transition hover:border-brand-300"
       >
         <span className="flex flex-wrap items-center gap-2">
           <KindPill p={p} />
@@ -280,7 +282,7 @@ function ItemCard({ row: { item: i, prescription: p }, rx, store, onOpen }: { ro
             {slashDate(p.prescribedOn)}
             {p.kind === "prescription" && p.department && ` · ${p.department}`}
           </span>
-          {i.active && <span className="text-xs font-bold text-sage-700">복용 중</span>}
+          {i.active && <span className="text-xs font-bold text-brand-700">복용 중</span>}
         </span>
         <span className="mt-1 block text-lg font-bold break-words text-ink">{i.name}</span>
         {i.ingredients && <span className="block text-sm text-ink-soft">성분 {i.ingredients}</span>}
@@ -301,7 +303,7 @@ function ItemCard({ row: { item: i, prescription: p }, rx, store, onOpen }: { ro
           onClick={() => void store.updateItem(i.id, { starred: !i.starred })}
           className={cn(
             "absolute top-3 right-3 flex h-11 w-11 items-center justify-center rounded-xl",
-            i.starred ? "text-sage-700" : "text-ink-soft/60 hover:text-ink-soft",
+            i.starred ? "text-brand-700" : "text-ink-soft/60 hover:text-ink-soft",
           )}
         >
           <Star className="h-5 w-5" fill={i.starred ? "currentColor" : "none"} aria-hidden />

@@ -146,8 +146,8 @@ export function TogetherView({
                 <ChipGroup ariaLabel="공유 기간" value={period} onChange={setPeriod} options={PERIODS.map((p) => ({ value: p.value, label: p.label }))} />
               </div>
               {preview && (
-                <div className="rounded-2xl border border-dashed border-sage-300 p-3" aria-label="상대에게 보이는 내용 미리 보기">
-                  <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-sage-800">
+                <div className="rounded-2xl border border-dashed border-brand-300 p-3" aria-label="상대에게 보이는 내용 미리 보기">
+                  <p className="mb-2 flex items-center gap-1.5 text-sm font-bold text-brand-800">
                     <Eye className="h-4 w-4" aria-hidden /> 상대에게 이렇게 보여요
                   </p>
                   <SharedRecordCard r={preview} />

@@ -35,7 +35,7 @@ export function VisitSummary({ rx, patient, questions, today }: { rx: RxSnapshot
     <div className="space-y-4">
       <div className="print-area space-y-5 rounded-2xl bg-white p-5 text-[0.95rem] text-ink" aria-label="진료용 요약">
         <header className="border-b border-line pb-3">
-          <p className="text-xs text-ink-soft">FeelPill(가칭) 진료용 요약 · {dotDate(today)} 작성 · 사용자가 직접 남긴 기록</p>
+          <p className="text-xs text-ink-soft">CareLog 진료용 요약 · {dotDate(today)} 작성 · 사용자가 직접 남긴 기록</p>
           <h3 className="text-xl font-extrabold">{patient.name}의 약 복용 기록</h3>
         </header>
 

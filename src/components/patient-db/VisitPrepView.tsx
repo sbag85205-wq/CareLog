@@ -3,6 +3,7 @@
 import { ChartNoAxesColumn, FileText, Pencil, Plus, Presentation, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { PageTitle } from "@/components/patient-ui/AppShell";
+import { ClipboardIcon } from "@/components/patient-ui/illustrations";
 import { Alert, CardHeading, cn, Notice, PButton, PCard, SoftSheet, StatusPill, Switch, TextField } from "@/components/patient-ui/kit";
 import { VisitShow } from "@/components/rx/RxDetail";
 import { VisitSummary } from "@/components/rx/VisitSummary";
@@ -88,10 +89,10 @@ export function VisitPrepView({
                       <button
                         type="button"
                         onClick={() => setShowId(p.id)}
-                        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-line bg-white p-3 text-left hover:border-sage-300"
+                        className="flex w-full items-center justify-between gap-2 rounded-2xl border border-line bg-white p-3 text-left hover:border-brand-300"
                       >
                         <span className="font-semibold text-ink">{prescriptionLabel(p, itemsOf(rx, p.id).length)}</span>
-                        <Presentation className="h-5 w-5 shrink-0 text-sage-700" aria-hidden />
+                        <Presentation className="h-5 w-5 shrink-0 text-brand-700" aria-hidden />
                       </button>
                     </li>
                   ))}
@@ -130,7 +131,7 @@ export function VisitPrepView({
                   {discomfort.map((n) => {
                     const p = rx.prescriptions.find((x) => x.id === n.prescriptionId);
                     return p ? (
-                      <li key={n.id} className="rounded-2xl bg-ivory p-3 text-sm text-ink">
+                      <li key={n.id} className="rounded-[0.875rem] border border-peach-100 bg-peach-50 p-3 text-sm text-ink">
                         {experienceSentence(p, n, rx.items.find((i) => i.id === n.itemId)?.name)}
                       </li>
                     ) : null;
@@ -166,7 +167,23 @@ export function VisitPrepView({
             )}
           </PCard>
         </div>
-        <QuestionsCard patientId={patient.id} questions={questions} repo={repo} rx={rx} />
+        <div className="space-y-5">
+          <QuestionsCard patientId={patient.id} questions={questions} repo={repo} rx={rx} />
+          {rx?.available && (
+            <PCard tone="tint" aria-labelledby="summary-card-title" className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <ClipboardIcon className="h-24 w-24 shrink-0" />
+              <div className="min-w-0">
+                <h2 id="summary-card-title" className="text-lg font-bold text-ink">
+                  진료용 요약
+                </h2>
+                <p className="mt-1 text-sm text-ink-soft">복용약 · 불편 경험 · 질문을 A4 한 장으로 모아 의료진에게 보여줄 수 있어요.</p>
+                <PButton size="sm" variant="secondary" icon={FileText} className="mt-3" onClick={() => setSummaryOpen(true)}>
+                  요약 열기
+                </PButton>
+              </div>
+            </PCard>
+          )}
+        </div>
       </div>
       <SoftSheet open={Boolean(shown)} title="진료 때 보여주기" onClose={() => setShowId(null)}>
         {shown && rx && <VisitShow p={shown} snapshot={rx} questions={questions} repo={repo} />}
@@ -182,7 +199,7 @@ function Row({ label, value, strong }: { label: string; value: string; strong?: 
   return (
     <div className="grid grid-cols-[7.5rem_1fr] gap-3 py-3 text-sm">
       <dt className="text-ink-soft">{label}</dt>
-      <dd className={cn("font-bold break-keep", strong ? "text-sage-700" : "text-ink")}>{value}</dd>
+      <dd className={cn("font-bold break-keep", strong ? "text-brand-700" : "text-ink")}>{value}</dd>
     </div>
   );
 }
@@ -194,7 +211,7 @@ function NextVisitCard({ patient, today, repo }: { patient: Patient; today: stri
   const d = patient.nextVisitDate ? diffDays(patient.nextVisitDate, today) : null;
   return (
     <PCard tone="tint" aria-labelledby="visit-title">
-      <p id="visit-title" className="text-sm font-bold text-sage-800">
+      <p id="visit-title" className="text-sm font-bold text-brand-800">
         다음 진료
       </p>
       {editing ? (
@@ -219,10 +236,10 @@ function NextVisitCard({ patient, today, repo }: { patient: Patient; today: stri
         </form>
       ) : (
         <>
-          <p className="mt-2 text-[1.6rem] leading-tight font-extrabold text-sage-900">
+          <p className="mt-2 text-[1.6rem] leading-tight font-extrabold text-brand-900">
             {patient.nextVisitDate ? formatLongKoreanDate(patient.nextVisitDate, false) : "아직 정하지 않았어요"}
           </p>
-          {d !== null && <p className="mt-1 text-sm text-sage-800">{d < 0 ? "지난 일정이에요" : d === 0 ? "오늘이에요" : `${d}일 남았어요`}</p>}
+          {d !== null && <p className="mt-1 text-sm text-brand-800">{d < 0 ? "지난 일정이에요" : d === 0 ? "오늘이에요" : `${d}일 남았어요`}</p>}
           <PButton variant="secondary" size="sm" className="mt-4" onClick={() => setEditing(true)}>
             {patient.nextVisitDate ? "진료일 변경" : "진료일 입력"}
           </PButton>
@@ -282,7 +299,7 @@ function QuestionsCard({
               <div className="flex items-start gap-3">
                 <input
                   type="checkbox"
-                  className="mt-1 h-5 w-5 shrink-0 accent-sage-700"
+                  className="mt-1 h-5 w-5 shrink-0 accent-brand-700"
                   checked={q.done}
                   aria-label={`${q.text} — 물어봤어요`}
                   onChange={() => void list.run(() => repo.toggleVisitQuestion(q.id))}
@@ -302,7 +319,7 @@ function QuestionsCard({
                       value={editText}
                       maxLength={200}
                       onChange={(e) => setEditText(e.target.value)}
-                      className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-white px-3 text-ink outline-none focus:border-sage-500 focus:ring-4 focus:ring-sage-100"
+                      className="h-11 min-w-0 flex-1 rounded-xl border border-line bg-white px-3 text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
                     />
                     <PButton type="submit" size="sm" disabled={!editText.trim() || list.pending}>
                       저장

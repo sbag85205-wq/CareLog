@@ -104,12 +104,12 @@ export function ShareView({ snapshot, patientId, repo, embedded }: { snapshot: D
             </PButton>
           </form>
           {link && (
-            <div className="mt-5 rounded-[1.25rem] bg-sage-100 p-4" aria-live="polite">
-              <p className="text-sm font-bold text-sage-900">{link.email} 님에게 보낼 초대 링크</p>
+            <div className="mt-5 rounded-[1.25rem] bg-brand-100 p-4" aria-live="polite">
+              <p className="text-sm font-bold text-brand-900">{link.email} 님에게 보낼 초대 링크</p>
               <p className="mt-2 rounded-xl bg-white px-3 py-2 font-mono text-xs break-all text-ink" data-testid="invite-link">
                 {link.url}
               </p>
-              <p className="mt-2 text-xs text-sage-800">
+              <p className="mt-2 text-xs text-brand-800">
                 이 링크는 지금만 보여요 · {formatDateTime(link.expiresAt)}까지 유효 · 초대받은 이메일 계정으로만 수락할 수 있어요.
               </p>
               <PButton

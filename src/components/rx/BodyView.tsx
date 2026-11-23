@@ -106,7 +106,7 @@ export function BodyView({
               key={item.id}
               type="button"
               onClick={() => onOpenItem(item.id)}
-              className="w-full rounded-[1.25rem] border border-line bg-white p-4 text-left hover:border-sage-300"
+              className="w-full rounded-[1.25rem] border border-line bg-white p-4 text-left hover:border-brand-300"
               aria-label={`${item.name} 날짜별 경험`}
             >
               <p className="flex items-center justify-between gap-2 font-bold text-ink">
@@ -115,7 +115,7 @@ export function BodyView({
               <ol className="mt-2 space-y-1.5">
                 {timeline.map(({ note }) => (
                   <li key={note.id} className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="w-24 shrink-0 font-semibold text-sage-800">{dotDate(noteDate(note))}</span>
+                    <span className="w-24 shrink-0 font-semibold text-brand-800">{dotDate(noteDate(note))}</span>
                     <TagPills tags={note.tags} small />
                   </li>
                 ))}
@@ -173,7 +173,7 @@ function ExperienceCard({
   const confirmedSuggestions = n.suggestedTags.filter((t) => n.tags.includes(t));
   return (
     <PCard className="!p-4" aria-label={`경험: ${item?.name ?? "함께 먹은 약 전체"}`}>
-      <p className="text-sm font-bold text-sage-800">{dotDate(noteDate(n))}</p>
+      <p className="text-sm font-bold text-brand-800">{dotDate(noteDate(n))}</p>
       <p className="mt-0.5 font-bold text-ink">{item ? item.name : `${p.kind === "otc" ? "이 등록 전체" : "함께 먹은 약 전체"} (${items.length}개)`}</p>
       {!item && <p className="text-xs font-semibold text-blush-700">어느 약 때문인지는 확인되지 않은 기록이에요</p>}
       <div className="mt-2">
@@ -191,18 +191,18 @@ function ExperienceCard({
         </p>
       )}
       {n.summary && (
-        <p className="mt-2 rounded-xl bg-sage-50 px-3 py-2 text-sm text-ink">
-          <span className="mr-1 text-xs font-bold text-sage-800">자동 정리</span>
+        <p className="mt-2 rounded-xl bg-brand-50 px-3 py-2 text-sm text-ink">
+          <span className="mr-1 text-xs font-bold text-brand-800">자동 정리</span>
           {n.summary}
         </p>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <KindPill p={p} />
-        <button type="button" onClick={() => onOpenRecord(p.id)} className="min-h-10 text-sm font-semibold text-sage-700 underline-offset-4 hover:underline">
+        <button type="button" onClick={() => onOpenRecord(p.id)} className="min-h-10 text-sm font-semibold text-brand-700 underline-offset-4 hover:underline">
           {slashDate(p.prescribedOn)} {p.kind === "otc" ? "등록" : `${p.department || ""} 처방`} 보기 →
         </button>
         {item && (
-          <button type="button" onClick={() => onOpenItem(item.id)} className="min-h-10 text-sm font-semibold text-sage-700 underline-offset-4 hover:underline">
+          <button type="button" onClick={() => onOpenItem(item.id)} className="min-h-10 text-sm font-semibold text-brand-700 underline-offset-4 hover:underline">
             이 약 모아 보기 →
           </button>
         )}

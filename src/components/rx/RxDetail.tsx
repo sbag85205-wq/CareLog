@@ -91,7 +91,7 @@ export function RxDetail({
               onClick={() => run(() => store.setStarred(p.id, !p.starred))}
               className={cn(
                 "flex h-12 w-12 items-center justify-center rounded-2xl border",
-                p.starred ? "border-sage-300 bg-sage-100 text-sage-800" : "border-line bg-white text-ink-soft",
+                p.starred ? "border-brand-300 bg-brand-100 text-brand-800" : "border-line bg-white text-ink-soft",
               )}
             >
               <Star className="h-5 w-5" fill={p.starred ? "currentColor" : "none"} aria-hidden />
@@ -133,7 +133,7 @@ export function RxDetail({
                 {i.strength && !i.name.includes(i.strength) && <span className="ml-1 text-ink-soft">{i.strength}</span>}
               </p>
               <span className="flex shrink-0 gap-1">
-                {i.starred && <Star className="h-5 w-5 text-sage-700" fill="currentColor" aria-label="보관한 약" />}
+                {i.starred && <Star className="h-5 w-5 text-brand-700" fill="currentColor" aria-label="보관한 약" />}
                 {i.active && <StatusPill check>복용 중</StatusPill>}
               </span>
             </div>
@@ -143,7 +143,7 @@ export function RxDetail({
             <div className="mt-1.5">
               <CategoryPills item={i} />
             </div>
-            {(!otc || i.dosage || i.frequency) && <p className="mt-1.5 text-sm font-semibold text-sage-800">{howToTake(i)}</p>}
+            {(!otc || i.dosage || i.frequency) && <p className="mt-1.5 text-sm font-semibold text-brand-800">{howToTake(i)}</p>}
             {!otc && <p className="text-sm text-ink-soft">기간: {i.duration || "미입력"}</p>}
             <div className="mt-2 space-y-1.5">
               <SourceNote source="rx" text={i.cautionRx} />
@@ -163,7 +163,7 @@ export function RxDetail({
               <button
                 type="button"
                 onClick={() => onOpenItem(i.id)}
-                className="mt-2 inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-sage-700 underline-offset-4 hover:underline"
+                className="mt-2 inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-brand-700 underline-offset-4 hover:underline"
               >
                 이 약의 경험 모아 보기 · 종류 고치기 <ChevronRight className="h-4 w-4" aria-hidden />
               </button>
@@ -290,11 +290,11 @@ export function VisitShow({ p, snapshot, questions, repo }: { p: Prescription; s
   return (
     <div className="space-y-4 text-[1.05rem]" aria-label="진료 때 보여줄 내용">
       <PCard tone="tint">
-        <p className="text-sm font-bold text-sage-800">{p.kind === "otc" ? "일반약 등록" : "처방"}</p>
-        <p className="text-2xl font-extrabold text-sage-900">
+        <p className="text-sm font-bold text-brand-800">{p.kind === "otc" ? "일반약 등록" : "처방"}</p>
+        <p className="text-2xl font-extrabold text-brand-900">
           {dotDate(p.prescribedOn)} · {p.kind === "otc" ? p.clinic || "일반약" : p.department || "진료과 미입력"}
         </p>
-        {p.kind === "prescription" && p.clinic && <p className="text-sm text-sage-800">{p.clinic}</p>}
+        {p.kind === "prescription" && p.clinic && <p className="text-sm text-brand-800">{p.clinic}</p>}
       </PCard>
       <PCard>
         <p className="mb-2 font-bold text-ink">
